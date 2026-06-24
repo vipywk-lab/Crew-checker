@@ -201,6 +201,10 @@ def check(blocks):
         pair   = f"{b['cap']}/{b['fo']}"
         fls    = '/'.join(f['fl'] for f in b['flights'])
 
+        # 기장 또는 부기장 등급 없으면 훈련생 페어링 → 규정위반 체크 스킵
+        if cap_g == '' or (fo_g == '' and fo_eff == ''):
+            continue
+
         if cap_n in CFG['spBan'] and fo_g in ('', 'X'):
             internalV.append({'type':'내부위반','detail':'SP불가+훈련생페어링','fl':fls,'pair':pair})
         if fo_n in CFG['spBan'] and cap_g in ('', 'X'):
@@ -439,6 +443,11 @@ async def main():
                 if violations or internalV:
                     all_results.append((date_str, violations, internalV))
                     print(f"🚨 규정위반 {len(violations)}건 / ⚠️ 내부위반 {len(internalV)}건")
+                    for v in violations:
+                        ap = f" ({v['ap']})" if v.get('ap') else ''
+                        print(f"    🚨 [{v['fl']}] {v['detail']}{ap} | {v['pair']}")
+                    for v in internalV:
+                        print(f"    ⚠️  [{v['fl']}] {v['detail']} | {v['pair']}")
                 else:
                     print('✅ 이상없음')
 
