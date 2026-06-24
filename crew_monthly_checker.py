@@ -12,6 +12,8 @@ from bs4 import BeautifulSoup
 from playwright.async_api import async_playwright, TimeoutError as PWTimeout
 import openpyxl
 from openpyxl.styles import Font, PatternFill, Alignment
+from tkinter import messagebox
+import tkinter as tk
 import os
 
 CMS_URL  = "https://crew.eastarjet.com/cms/Admin/Schedule/CrewPairs/CrewPairList.php"
@@ -69,7 +71,10 @@ def parse_table(html):
             continue
 
         def cell_txt(c):
-            return re.sub(r' {2,}', ' ', c.get_text(' ', strip=True))
+            txt = re.sub(r' {2,}', ' ', c.get_text(' ', strip=True))
+            # CMS HTML: 이름과 등급 사이 공백 제거 ("정병국 A" → "정병국A")
+            txt = re.sub(r'([가-힣]) ([ABCX](?:LV|ALV|CLV)?)\b', r'\1\2', txt)
+            return txt
 
         cap_cell   = cell_txt(cells[0])
         fo_cell    = cell_txt(cells[1])
@@ -347,6 +352,33 @@ def save_excel(all_results, year, month):
     return out_path, total_v, total_i
 
 
+def get_target_month():
+    """이번 달 / 다음 달 선택 팝업"""
+    root = tk.Tk()
+    root.withdraw()
+    today = datetime.now()
+    this_y, this_m = today.year, today.month
+    if this_m == 12:
+        next_y, next_m = this_y + 1, 1
+    else:
+        next_y, next_m = this_y, this_m + 1
+
+    answer = messagebox.askquestion(
+        "조회 월 선택",
+        f"조회할 월을 선택하세요.\n\n"
+        f"  [예]    다음 달 ({next_y}년 {next_m:02d}월, 1일~말일)\n"
+        f"  [아니오] 이번 달 ({this_y}년 {this_m:02d}월, 오늘~말일)",
+        icon="question"
+    )
+    root.destroy()
+    if answer == "yes":
+        last = calendar.monthrange(next_y, next_m)[1]
+        return next_y, next_m, 1, last
+    else:
+        last = calendar.monthrange(this_y, this_m)[1]
+        return this_y, this_m, today.day, last
+
+
 async def main():
     print('='*50)
     print('✈  편조점검 월간 자동 조회 v1.0')
@@ -354,9 +386,8 @@ async def main():
     print('='*50)
 
     today = datetime.now()
-    year, month = today.year, today.month
-    last_day = calendar.monthrange(year, month)[1]
-    print(f"\n조회 대상: {year}년 {month:02d}월 (1일 ~ {last_day}일)\n")
+    year, month, start_day, last_day = get_target_month()
+    print(f"\n조회 대상: {year}년 {month:02d}월 ({start_day}일 ~ {last_day}일)\n")
 
     async with async_playwright() as p:
         browser = await p.chromium.launch(headless=HEADLESS, args=[
@@ -377,23 +408,23 @@ async def main():
 
         all_results = []
 
-        for day in range(1, last_day + 1):
+        for day in range(start_day, last_day + 1):
             date_str = f"{year}/{month:02d}/{day:02d}"
             url = f"{CMS_URL}?d={year}-{month:02d}-{day:02d}&s=true&e=true&a=true"
 
             print(f"[{day:02d}/{last_day}] {date_str} 조회 중...", end=' ', flush=True)
 
             try:
-                await page.goto(url, wait_until='domcontentloaded', timeout=20000)
-                await page.wait_for_timeout(1500)
+                await page.goto(url, wait_until='networkidle', timeout=30000)
+                await page.wait_for_timeout(2500)
 
                 # 세션 만료 체크
                 body = await page.inner_text('body')
                 if 'SESSION EXPIRED' in body or 'logout' in page.url:
                     print('⚠️  세션 만료 → 재로그인 후 엔터')
                     await asyncio.get_event_loop().run_in_executor(None, input, '  [재로그인 후 엔터] ')
-                    await page.goto(url, wait_until='domcontentloaded', timeout=20000)
-                    await page.wait_for_timeout(1500)
+                    await page.goto(url, wait_until='networkidle', timeout=30000)
+                    await page.wait_for_timeout(2500)
 
                 html = await page.content()
                 rows = parse_table(html)
@@ -411,7 +442,7 @@ async def main():
                 else:
                     print('✅ 이상없음')
 
-                await page.wait_for_timeout(800)
+                await page.wait_for_timeout(1200)
 
             except PWTimeout:
                 print('⏱️ 타임아웃 (스킵)')
@@ -428,7 +459,7 @@ async def main():
     out_path, total_v, total_i = save_excel(all_results, year, month)
 
     print(f'\n{"="*50}')
-    print(f'✅ 조회 완료: {len(all_results)}일 위반 발생')
+    print(f'✅ 조회 완료: {len(all_results)}일 위반 발생 ({start_day}일~{last_day}일)')
     print(f'  🚨 규정위반: {total_v}건')
     print(f'  ⚠️  내부위반: {total_i}건')
     print(f'\n저장 완료: {out_path}')
