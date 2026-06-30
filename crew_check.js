@@ -1,1 +1,280 @@
-(function(){if(document.getElementById('_crewck')){document.getElementById('_crewck').remove();return;}var tables=document.querySelectorAll('table');if(!tables[1]){alert('편조 데이터를 찾을 수 없습니다.\n스케줄 페이지(CrewPairList.php)가 맞는지 확인해주세요.');return;}var rows=[];tables[1].querySelectorAll('tr').forEach(function(tr){var cells=tr.cells;if(!cells||cells.length<3){var t=tr.textContent.replace(/[\t\n\r]+/g,' ').replace(/ {2,}/g,' ').trim();if(t)rows.push(t);return;}var cellTxt=function(c){return c.textContent.replace(/[\t\n\r]+/g,' ').replace(/ {2,}/g,' ').trim();};var capCell=cellTxt(cells[0]),foCell=cellTxt(cells[1]),extraCell=cells.length>2?cellTxt(cells[2]):'';var nameRe=/[가-힣]{2,5}([ABCX](LV|ALV|CLV)?)?/g,m;var caps=[],fos=[],extras=[];while((m=nameRe.exec(capCell))!==null)caps.push(m[0]);nameRe.lastIndex=0;while((m=nameRe.exec(foCell))!==null)fos.push(m[0]);nameRe.lastIndex=0;while((m=nameRe.exec(extraCell))!==null)extras.push(m[0]);var rest='';for(var i=3;i<cells.length;i++)rest+=' '+cellTxt(cells[i]);var ordered=[],maxLen=Math.max(caps.length,fos.length);for(var k=0;k<maxLen;k++){if(k<caps.length)ordered.push(caps[k]);if(k<fos.length)ordered.push(fos[k]);}ordered=ordered.concat(extras);var line=(ordered.join(' ')+rest).trim();if(line)rows.push(line);});if(!rows.length){alert('편조 데이터를 찾을 수 없습니다.');return;}var raw=rows.join('\n');var dm=location.href.match(/d=(\d{4}-\d{2}-\d{2})/);var date=dm?dm[1].replace(/-/g,'/'):new Date().toLocaleDateString('ko-KR',{year:'numeric',month:'2-digit',day:'2-digit'}).replace(/\.\s*/g,'/').replace(/\/$/,'');var CFG={A:new Set(['YNT','DSN','CGO','TXN','CGQ','SHE','HRB','MDC','KOJ','KMJ','TKS','CXR','DYG','DLC','YNJ','BSZ','ALA','HKG','MFM']),B:new Set(['NRT','OKA','TSA','DAD','FUK','PUS']),C:new Set(['PVG','KIX','CTS','KUV','ICN','GMP','CJJ','BKK','CNX','TPE','PQC','CJU']),cxrBan:new Set(['신윤식','정진우']),dadBan:new Set(['장준욱']),foAonly:new Set(['김상겸']),foABonly:new Set(['신영근']),qa:new Set(['박지현','신현욱','박승훈','신준서']),cp:new Set(['황종식','성기중','이재환','이태우']),spBan:new Set(['이주화','양병모','엄태국','김우영','최은총','장재봉','이창민','이한솔','정종성','김공주']),gradeOverride:new Map([['한상일','C'],['이영','B']])};function getName(s){return s.replace(/[ABCX](LV|ALV|CLV)?.*$/,'');}function getSiteGrade(s){var m=s.match(/^[가-힣]{2,5}([ABCX])(LV|ALV|CLV)?/);return m?m[1]:'';}function getGrade(s){var n=getName(s);if(CFG.gradeOverride.has(n))return CFG.gradeOverride.get(n);return getSiteGrade(s);}function isJunk(s){return /^\d{1,2}\/\d{1,2}/.test(s)||/편조/.test(s)||/점검/.test(s)||s.length===0;}function parse(raw){var lines=raw.split('\n').map(function(s){return s.trim();}).filter(function(s){return s.length>0;});var merged=[];lines.forEach(function(L){if(/^(LV|ALV|CLV)$/.test(L)&&merged.length>0&&/[가-힣]{2,5}[ABCX]?$/.test(merged[merged.length-1]))merged[merged.length-1]+=L;else merged.push(L);});var clean=merged.filter(function(L){return !isJunk(L);});var typed=[];clean.forEach(function(line){var allRe=/(\d{2}:\d{2})|([A-Z]{3,4}\/[A-Z]{3,4})|(\d{3,4})(?![\d:])|([가-힣]{2,5}([ABCX](LV|ALV|CLV)?)?)/g,m;while((m=allRe.exec(line))!==null){if(m[1])typed.push({t:'time',v:m[1]});else if(m[2])typed.push({t:'route',v:m[2]});else if(m[3])typed.push({t:'flight',v:m[3]});else if(m[4])typed.push({t:'name',v:m[4]});}});var blocks=[],i=0,N=typed.length;while(i<N){var ns=[];while(i<N&&typed[i].t==='name'){ns.push(typed[i].v);i++;}if(!ns.length){var fl0=[];while(i<N&&typed[i].t==='flight'){var f0=typed[i].v;i++;if(i<N&&typed[i].t==='route'){var r0=typed[i].v;i++;while(i<N&&typed[i].t==='time')i++;fl0.push({fl:f0,rt:r0});}}if(fl0.length&&blocks.length)blocks[blocks.length-1].flights.push.apply(blocks[blocks.length-1].flights,fl0);while(i<N&&typed[i].t!=='name'&&typed[i].t!=='flight')i++;continue;}var fl1=[];while(i<N&&typed[i].t==='flight'){var f1=typed[i].v;i++;if(i<N&&typed[i].t==='route'){var r1=typed[i].v;i++;while(i<N&&typed[i].t==='time')i++;fl1.push({fl:f1,rt:r1});}}blocks.push({names:ns,flights:fl1});}var mains=[],solos=[];blocks.forEach(function(b){if(b.names.length>=2)mains.push({cap:b.names[0],fo:b.names[1],extra:b.names.slice(2),flights:b.flights});else if(b.names.length===1&&b.flights.length>0)solos.push(b);});solos.forEach(function(s){var sfl=new Set(s.flights.map(function(f){return f.fl;})),best=null,bsc=-1;mains.forEach(function(m){var mfl=new Set(m.flights.map(function(f){return f.fl;})),cnt=0;sfl.forEach(function(f){if(mfl.has(f))cnt++;});if(cnt===sfl.size&&cnt>bsc){best=m;bsc=cnt;}});var allXorNograde=s.names.every(function(n){var g=getGrade(n);return g==='X'||g==='';});if(allXorNograde)s.asSolo=true;else if(best)best.extra.push.apply(best.extra,s.names);else s.asSolo=true;});var result=[];mains.forEach(function(m){var all=[m.cap,m.fo].concat(m.extra);var graded=all.filter(function(n){return['A','B','C'].includes(getGrade(n));});var nograde=all.filter(function(n){return!['A','B','C'].includes(getGrade(n))&&getGrade(n)!=='X';});if(graded.length>=4){result.push({cap:graded[0],fo:graded[1],extra:nograde,flights:m.flights});result.push({cap:graded[2],fo:graded[3],extra:[],flights:m.flights});}else result.push(m);});solos.forEach(function(s){if(s.asSolo)result.push({isSolo:true,names:s.names,flights:s.flights});});return result;}function check(blocks){var violations=[],internalV=[],specials=[],ccap=[],cfo=[],aap=[],intok=[];var seen={cc:new Set(),cf:new Set(),aa:new Set(),sp:new Set(),io:new Set()};var flSet=new Set();function sp(g,fl,c){var k=g+'|'+fl+'|'+c;if(!seen.sp.has(k)){seen.sp.add(k);specials.push({g:g,fl:fl,c:c});}}blocks.forEach(function(b){if(b.isSolo){var fls0=b.flights.map(function(f){return f.fl;}).join('/');b.flights.forEach(function(f){flSet.add(f.fl);});b.names.forEach(function(n){var g=getGrade(n),label=g==='X'?'DH/훈련':'추가 탑승';sp(label,fls0,getName(n));});return;}var capN=getName(b.cap),capG=getGrade(b.cap),foN=getName(b.fo),foG=getGrade(b.fo);var foEff=(foG===''||foG==='X')?(foG==='X'?'SKIP':''):foG;var pair=b.cap+'/'+b.fo,fls=b.flights.map(function(f){return f.fl;}).join('/');[b.cap,b.fo].concat(b.extra||[]).forEach(function(raw){var nm=getName(raw),sg=getSiteGrade(raw);if(CFG.gradeOverride.has(nm)&&sg===CFG.gradeOverride.get(nm)){sp('✅사이트 등급 갱신 확인(오버라이드 해제 가능)',fls,nm+'('+sg+')');}});if(CFG.spBan.has(capN)&&(foG===''||foG==='X'))internalV.push({h:'SP불가+훈련생페어링',fl:fls,p:pair});if(CFG.spBan.has(foN)&&(capG===''||capG==='X'))internalV.push({h:'SP불가+훈련생페어링',fl:fls,p:pair});b.flights.forEach(function(flt){flSet.add(flt.fl);var parts=flt.rt.split('/'),org=parts[0],dst=parts[1];if(capG==='C'){var ok=foEff==='A',obsAFO=null;if(!ok&&(foEff==='SKIP'||foEff==='')){obsAFO=b.extra.find(function(e){return getGrade(e)==='A';});if(obsAFO)ok=true;}var ck='cc|'+pair;if(!seen.cc.has(ck)){seen.cc.add(ck);ccap.push({p:pair,fl:fls,ok:ok});}if(!ok){var msg=(foEff==='SKIP'||foEff==='')?'C기장 관숙 편성 위반(FO A 동승 필요)':'C기장 페어링 위반';violations.push({g:msg,fl:flt.fl,p:pair});}if(obsAFO&&ok)sp('✅C기장 관숙편성',fls,b.cap+'+'+b.fo+'+'+getName(obsAFO)+'(A)');[org,dst].forEach(function(ap){if(CFG.B.has(ap))violations.push({g:'B공항 C기장 위반',fl:flt.fl,p:pair,ap:ap});if(!CFG.A.has(ap)&&!CFG.B.has(ap)&&!CFG.C.has(ap))violations.push({g:'C기장 분류외 공항 위반',fl:flt.fl,p:pair,ap:ap});});}if(foEff==='C'){var ok2=capG==='A',ck2='cf|'+pair;if(!seen.cf.has(ck2)){seen.cf.add(ck2);cfo.push({p:pair,fl:fls,ok:ok2});}if(!ok2)violations.push({g:'C부기장 페어링 위반',fl:flt.fl,p:pair});[org,dst].forEach(function(ap){if(!CFG.A.has(ap)&&!CFG.B.has(ap)&&!CFG.C.has(ap))violations.push({g:'C부기장 분류외 공항 위반',fl:flt.fl,p:pair,ap:ap});});}[org,dst].forEach(function(ap){if(CFG.A.has(ap)){var cok=capG==='A',fok=foEff==='A'||foEff==='SKIP';var k='aa|'+pair+'|'+ap;if(!seen.aa.has(k)){seen.aa.add(k);aap.push({p:pair,fl:fls,ap:ap,ok:cok&&fok});}if(!cok)violations.push({g:'A공항 기장 등급 위반',fl:flt.fl,p:pair,ap:ap});if(!fok)violations.push({g:'A공항 부기장 등급 위반',fl:flt.fl,p:pair,ap:ap});}if(ap==='CXR'&&CFG.cxrBan.has(capN))internalV.push({h:'CXR 금지',fl:flt.fl,p:b.cap});if(ap==='DAD'&&CFG.dadBan.has(capN))internalV.push({h:'DAD 금지',fl:flt.fl,p:b.cap});});if(CFG.foAonly.has(capN)){if(foEff!=='A')internalV.push({h:capN+' FO제한위반',fl:flt.fl,p:b.fo});else{var iok='io|'+pair;if(!seen.io.has(iok)){seen.io.add(iok);intok.push({cap:b.cap,fl:fls,fo:b.fo,rule:'FO A only'});}}}if(CFG.foABonly.has(capN)){if(!['A','B'].includes(foEff))internalV.push({h:capN+' FO제한위반',fl:flt.fl,p:b.fo});else{var iok2='io|'+pair;if(!seen.io.has(iok2)){seen.io.add(iok2);intok.push({cap:b.cap,fl:fls,fo:b.fo,rule:'FO A/B only'});}}}});if(CFG.qa.has(capN))sp('ℹ️품질심사관',fls,capN);if(CFG.qa.has(foN))sp('ℹ️품질심사관',fls,foN);if(CFG.cp.has(capN))sp('ℹ️노선심사관',fls,capN);if(CFG.cp.has(foN))sp('ℹ️노선심사관',fls,foN);if(foG==='X')sp('DH/훈련',fls,foN);if(b.extra&&b.extra.length){var ng=b.extra.filter(function(e){return getGrade(e)===''&&/^[가-힣]{2,4}$/.test(e);});var g2=b.extra.filter(function(e){return['A','B','C'].includes(getGrade(e));});var gx=b.extra.filter(function(e){return getGrade(e)==='X';});if(ng.length)sp('추가탑승',fls,ng.join(','));if(g2.length)sp('추가탑승',fls,g2.join(','));if(gx.length)sp('DH/훈련',fls,gx.map(function(e){return getName(e);}).join(','));}});return{violations:violations,internalV:internalV,specials:specials,ccap:ccap,cfo:cfo,aap:aap,intok:intok,total:flSet.size};}function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}function row(cells){return '<tr>'+(cells.map(function(c){return'<td>'+c+'</td>';}).join(''))+'</tr>';}var STYLE='#_crewck *{box-sizing:border-box}#_crewck .st{display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap}#_crewck .st>div{flex:1;background:#1e3a5f;border-radius:8px;padding:8px;text-align:center}#_crewck .st b{display:block;font-size:18px;font-weight:700}#_crewck .st small{font-size:10px;color:#888}#_crewck .st.bad{background:#5f1e1e}#_crewck .st.bad b{color:#ff6b6b}#_crewck .st.warn{background:#4a3a1e}#_crewck .st.warn b{color:#ffd166}#_crewck .st b.bl{color:#4fc3f7}#_crewck .sec{border-radius:8px;padding:10px;margin-bottom:8px;font-size:11px}#_crewck .sec h4{margin-bottom:6px;font-weight:700;font-size:12px}#_crewck .sec.v{background:#3a1e1e;border:1px solid #ff6b6b44}#_crewck .sec.v h4{color:#ff6b6b}#_crewck .sec.i{background:#3a2e1e;border:1px solid #ffd16644}#_crewck .sec.i h4{color:#ffd166}#_crewck .sec.ok{background:#1e2a1e;border:1px solid #4ade8044}#_crewck .sec.ok h4{color:#86efac}#_crewck .sec.info{background:#1e2a3a}#_crewck .sec.info h4{color:#4fc3f7}#_crewck .sec table{width:100%;border-collapse:collapse}#_crewck .sec td{padding:4px 8px;border-bottom:1px solid #2a2a3e}#_crewck .ok{color:#4ade80}#_crewck .bad{color:#ff6b6b}#_crewck .lbl{color:#aaa;margin:5px 0 3px}#_crewck .none{color:#4ade80;text-align:center;padding:30px;font-size:14px}';function render(r){var vc=r.violations.length,ic=r.internalV.length,h='';h+='<div class="st">';h+='<div><b>'+r.total+'</b><small>총편수</small></div>';h+='<div class="'+(vc?'bad':'')+'"><b class="'+(vc?'':'bl')+'">'+vc+'</b><small>규정위반</small></div>';h+='<div class="'+(ic?'warn':'')+'"><b class="'+(ic?'':'bl')+'">'+ic+'</b><small>내부위반</small></div>';h+='<div><b>'+r.specials.length+'</b><small>특이사항</small></div>';h+='</div>';if(vc){h+='<div class="sec v"><h4>🚨 규정 위반 '+vc+'건</h4><table><tbody>';r.violations.forEach(function(v){h+=row(['['+esc(v.fl)+']',esc(v.g)+(v.ap?' ('+v.ap+')':''),esc(v.p)]);});h+='</tbody></table></div>';}if(ic){h+='<div class="sec i"><h4>⚠️ 내부 위반 '+ic+'건</h4><table><tbody>';r.internalV.forEach(function(v){h+=row(['['+esc(v.fl)+']',esc(v.h),esc(v.p)]);});h+='</tbody></table></div>';}if(r.intok.length){h+='<div class="sec ok"><h4>✅ 내부 제한 정상 페어링 '+r.intok.length+'건</h4><table><tbody>';r.intok.forEach(function(x){h+=row([esc(x.cap)+' ('+esc(x.rule)+')',esc(x.fl),esc(x.fo)]);});h+='</tbody></table></div>';}if(r.ccap.length||r.cfo.length||r.aap.length){h+='<div class="sec info"><h4>📋 등급별 편조</h4>';if(r.ccap.length){h+='<div class="lbl">C기장</div><table><tbody>';r.ccap.forEach(function(x){h+=row([esc(x.p),esc(x.fl),x.ok?'<span class="ok">✓정상</span>':'<span class="bad">✗위반</span>']);});h+='</tbody></table>';}if(r.cfo.length){h+='<div class="lbl">C부기장</div><table><tbody>';r.cfo.forEach(function(x){h+=row([esc(x.p),esc(x.fl),x.ok?'<span class="ok">✓정상</span>':'<span class="bad">✗위반</span>']);});h+='</tbody></table>';}if(r.aap.length){h+='<div class="lbl">A공항</div><table><tbody>';r.aap.forEach(function(x){h+=row([esc(x.p),esc(x.fl),esc(x.ap),x.ok?'<span class="ok">✓</span>':'<span class="bad">✗</span>']);});h+='</tbody></table>';}h+='</div>';}if(r.specials.length){h+='<div class="sec ok"><h4>ℹ️ 특이사항</h4><table><tbody>';r.specials.forEach(function(x){h+=row([esc(x.g),esc(x.fl),esc(x.c)]);});h+='</tbody></table></div>';}if(!vc&&!ic&&!r.specials.length)h+='<div class="none">✅ 이상 없음</div>';return h;}var result=check(parse(raw));var panel=document.createElement('div');panel.id='_crewck';panel.style.cssText='position:fixed;top:0;right:0;width:480px;max-width:100vw;height:100vh;background:#12122a;color:#e0e0e0;overflow-y:auto;z-index:2147483647;padding:16px;font-family:sans-serif;font-size:12px;box-shadow:-6px 0 24px rgba(0,0,0,.6)';panel.innerHTML='<style>'+STYLE+'</style><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;border-bottom:1px solid #2a2a4a;padding-bottom:10px"><div><div style="font-weight:700;font-size:14px;color:#E4002B">✈ 편조 점검</div><div style="color:#888;font-size:11px">'+date+'</div></div><button onclick="document.getElementById(\'_crewck\').remove()" style="background:none;border:none;color:#888;font-size:18px;cursor:pointer;padding:4px 8px">✕</button></div>'+render(result);document.body.appendChild(panel);})();
+(function(){
+  if(document.getElementById('_crewck')){document.getElementById('_crewck').remove();return;}
+  var tables=document.querySelectorAll('table');
+  if(!tables[1]){alert('편조 데이터를 찾을 수 없습니다.\n스케줄 페이지(CrewPairList.php)가 맞는지 확인해주세요.');return;}
+  var rows=[];
+  tables[1].querySelectorAll('tr').forEach(function(tr){
+    var cells=tr.cells;
+    if(!cells||cells.length<3){
+      var t=tr.textContent.replace(/[\t\n\r]+/g,' ').replace(/ {2,}/g,' ').trim();
+      if(t)rows.push(t);
+      return;
+    }
+    var cellTxt=function(c){return c.textContent.replace(/[\t\n\r]+/g,' ').replace(/ {2,}/g,' ').trim();};
+    var capCell=cellTxt(cells[0]),foCell=cellTxt(cells[1]),extraCell=cells.length>2?cellTxt(cells[2]):'';
+    var nameRe=/[가-힣]{2,5}([ABCX](LV|ALV|CLV)?)?/g,m;
+    var caps=[],fos=[],extras=[];
+    while((m=nameRe.exec(capCell))!==null)caps.push(m[0]);
+    nameRe.lastIndex=0;
+    while((m=nameRe.exec(foCell))!==null)fos.push(m[0]);
+    nameRe.lastIndex=0;
+    while((m=nameRe.exec(extraCell))!==null)extras.push(m[0]);
+    var rest='';
+    for(var i=3;i<cells.length;i++)rest+=' '+cellTxt(cells[i]);
+    var ordered=[],maxLen=Math.max(caps.length,fos.length);
+    for(var k=0;k<maxLen;k++){
+      if(k<caps.length)ordered.push(caps[k]);
+      if(k<fos.length)ordered.push(fos[k]);
+    }
+    ordered=ordered.concat(extras);
+    var line=(ordered.join(' ')+rest).trim();
+    if(line)rows.push(line);
+  });
+  if(!rows.length){alert('편조 데이터를 찾을 수 없습니다.');return;}
+  var raw=rows.join('\n');
+  var dm=location.href.match(/d=(\d{4}-\d{2}-\d{2})/);
+  var date=dm?dm[1].replace(/-/g,'/'):'날짜미상';
+
+  var CFG={
+    A:new Set(['YNT','DSN','DAT','CGO','TXN','CGQ','SHE','HRB','MDC','KOJ','KMJ','IZO','TKS','TAE','CXR','DYG','DLC','YNJ','HKG','ALA']),
+    B:new Set(['NTG','NRT','OKA','TSA','DAD','FUK','PUS']),
+    C:new Set(['PVG','KIX','CTS','KUV','ICN','GMP','CJJ','BKK','CNX','TPE','PQC','CJU']),
+    cxrBan:new Set(['신윤식','정진우']),
+    dadBan:new Set(['장준욱']),
+    foAonly:new Set(['김상겸']),
+    foABonly:new Set(['신영근']),
+    qa:new Set(['박지현','신현욱','박승훈','신준서']),
+    cp:new Set(['황종식','성기중','이재환','이태우']),
+    spBan:new Set(['이주화','양병모','엄태국','김우영','최은총','장재봉','이창민','이한솔','정종성','김공주']),
+    gradeOverride:new Map([['한상일','C'],['이영','B']])
+  };
+
+  function getName(s){return s.replace(/[ABCX](LV|ALV|CLV)?.*$/,'');}
+  function getSiteGrade(s){
+    var m=s.match(/^[가-힣]{2,5}([ABCX])(LV|ALV|CLV)?/);
+    return m?m[1]:'';
+  }
+  function getGrade(s){
+    var n=getName(s);
+    if(CFG.gradeOverride.has(n))return CFG.gradeOverride.get(n);
+    return getSiteGrade(s);
+  }
+  function isJunk(s){return /^\d{1,2}\/\d{1,2}/.test(s)||/편조/.test(s)||/점검/.test(s)||s.length===0;}
+
+  function parse(raw){
+    var lines=raw.split('\n').map(function(s){return s.trim();}).filter(function(s){return s.length>0;});
+    var merged=[];
+    lines.forEach(function(L){
+      if(/^(LV|ALV|CLV)$/.test(L)&&merged.length>0&&/[가-힣]{2,5}[ABCX]?$/.test(merged[merged.length-1]))merged[merged.length-1]+=L;
+      else merged.push(L);
+    });
+    var clean=merged.filter(function(L){return !isJunk(L);});
+    var typed=[];
+    clean.forEach(function(line){
+      var allRe=/(\d{2}:\d{2})|([A-Z]{3,4}\/[A-Z]{3,4})|(\d{3,4})(?![\d:])|([가-힣]{2,5}([ABCX](LV|ALV|CLV)?)?)/g,m;
+      while((m=allRe.exec(line))!==null){
+        if(m[1])typed.push({t:'time',v:m[1]});
+        else if(m[2])typed.push({t:'route',v:m[2]});
+        else if(m[3])typed.push({t:'flight',v:m[3]});
+        else if(m[4])typed.push({t:'name',v:m[4]});
+      }
+    });
+    var blocks=[],i=0,N=typed.length;
+    while(i<N){
+      var ns=[];
+      while(i<N&&typed[i].t==='name'){ns.push(typed[i].v);i++;}
+      if(!ns.length){
+        var fl0=[];
+        while(i<N&&typed[i].t==='flight'){
+          var f0=typed[i].v;i++;
+          if(i<N&&typed[i].t==='route'){var r0=typed[i].v;i++;while(i<N&&typed[i].t==='time')i++;fl0.push({fl:f0,rt:r0});}
+        }
+        if(fl0.length&&blocks.length)blocks[blocks.length-1].flights.push.apply(blocks[blocks.length-1].flights,fl0);
+        while(i<N&&typed[i].t!=='name'&&typed[i].t!=='flight')i++;
+        continue;
+      }
+      var fl1=[];
+      while(i<N&&typed[i].t==='flight'){
+        var f1=typed[i].v;i++;
+        if(i<N&&typed[i].t==='route'){var r1=typed[i].v;i++;while(i<N&&typed[i].t==='time')i++;fl1.push({fl:f1,rt:r1});}
+      }
+      blocks.push({names:ns,flights:fl1});
+    }
+    var mains=[],solos=[];
+    blocks.forEach(function(b){
+      if(b.names.length>=2)mains.push({cap:b.names[0],fo:b.names[1],extra:b.names.slice(2),flights:b.flights});
+      else if(b.names.length===1&&b.flights.length>0)solos.push(b);
+    });
+    solos.forEach(function(s){
+      var sfl=new Set(s.flights.map(function(f){return f.fl;})),best=null,bsc=-1;
+      mains.forEach(function(m){
+        var mfl=new Set(m.flights.map(function(f){return f.fl;})),cnt=0;
+        sfl.forEach(function(f){if(mfl.has(f))cnt++;});
+        if(cnt===sfl.size&&cnt>bsc){best=m;bsc=cnt;}
+      });
+      var allXorNograde=s.names.every(function(n){var g=getGrade(n);return g==='X'||g==='';});
+      if(allXorNograde)s.asSolo=true;
+      else if(best)best.extra.push.apply(best.extra,s.names);
+      else s.asSolo=true;
+    });
+    var result=[];
+    mains.forEach(function(m){
+      var all=[m.cap,m.fo].concat(m.extra);
+      var graded=all.filter(function(n){return['A','B','C'].includes(getGrade(n));});
+      var nograde=all.filter(function(n){return!['A','B','C'].includes(getGrade(n))&&getGrade(n)!=='X';});
+      if(graded.length>=4){
+        result.push({cap:graded[0],fo:graded[1],extra:nograde,flights:m.flights});
+        result.push({cap:graded[2],fo:graded[3],extra:[],flights:m.flights});
+      }else result.push(m);
+    });
+    solos.forEach(function(s){
+      if(s.asSolo)result.push({isSolo:true,names:s.names,flights:s.flights});
+    });
+    return result;
+  }
+
+  function check(blocks){
+    var violations=[],internalV=[],specials=[],ccap=[],cfo=[],aap=[],intok=[];
+    var seen={cc:new Set(),cf:new Set(),aa:new Set(),sp:new Set(),io:new Set()};
+    var flSet=new Set();
+    function sp(g,fl,c){var k=g+'|'+fl+'|'+c;if(!seen.sp.has(k)){seen.sp.add(k);specials.push({g:g,fl:fl,c:c});}}
+    blocks.forEach(function(b){
+      if(b.isSolo){
+        var fls0=b.flights.map(function(f){return f.fl;}).join('/');
+        b.flights.forEach(function(f){flSet.add(f.fl);});
+        b.names.forEach(function(n){
+          var g=getGrade(n),label=g==='X'?'DH/훈련':'추가 탑승';
+          sp(label,fls0,getName(n));
+        });
+        return;
+      }
+      var capN=getName(b.cap),capG=getGrade(b.cap),foN=getName(b.fo),foG=getGrade(b.fo);
+      var foEff=(foG===''||foG==='X')?(foG==='X'?'SKIP':''):foG;
+      var pair=b.cap+'/'+b.fo,fls=b.flights.map(function(f){return f.fl;}).join('/');
+
+      [b.cap,b.fo].concat(b.extra||[]).forEach(function(raw){
+        var nm=getName(raw),sg=getSiteGrade(raw);
+        if(CFG.gradeOverride.has(nm)&&sg===CFG.gradeOverride.get(nm)){
+          sp('✅사이트 등급 갱신 확인(오버라이드 해제 가능)',fls,nm+'('+sg+')');
+        }
+      });
+
+      if(CFG.spBan.has(capN)&&(foG===''||foG==='X'))internalV.push({h:'SP불가+훈련생페어링',fl:fls,p:pair});
+      if(CFG.spBan.has(foN)&&(capG===''||capG==='X'))internalV.push({h:'SP불가+훈련생페어링',fl:fls,p:pair});
+      b.flights.forEach(function(flt){
+        flSet.add(flt.fl);
+        var parts=flt.rt.split('/'),org=parts[0],dst=parts[1];
+        if(capG==='C'){
+          var ok=foEff==='A',obsAFO=null;
+          if(!ok&&(foEff==='SKIP'||foEff==='')){
+            obsAFO=b.extra.find(function(e){return getGrade(e)==='A';});
+            if(obsAFO)ok=true;
+          }
+          var ck='cc|'+pair;
+          if(!seen.cc.has(ck)){seen.cc.add(ck);ccap.push({p:pair,fl:fls,ok:ok});}
+          if(!ok){
+            var msg=(foEff==='SKIP'||foEff==='')?'C기장 관숙 편성 위반(FO A 동승 필요)':'C기장 페어링 위반';
+            violations.push({g:msg,fl:flt.fl,p:pair});
+          }
+          if(obsAFO&&ok)sp('✅C기장 관숙편성',fls,b.cap+'+'+b.fo+'+'+getName(obsAFO)+'(A)');
+          [org,dst].forEach(function(ap){
+            if(CFG.B.has(ap))violations.push({g:'B공항 C기장 위반',fl:flt.fl,p:pair,ap:ap});
+            if(!CFG.A.has(ap)&&!CFG.B.has(ap)&&!CFG.C.has(ap))violations.push({g:'C기장 분류외 공항 위반',fl:flt.fl,p:pair,ap:ap});
+          });
+        }
+        if(foEff==='C'){
+          var ok2=capG==='A',ck2='cf|'+pair;
+          if(!seen.cf.has(ck2)){seen.cf.add(ck2);cfo.push({p:pair,fl:fls,ok:ok2});}
+          if(!ok2)violations.push({g:'C부기장 페어링 위반',fl:flt.fl,p:pair});
+          [org,dst].forEach(function(ap){
+            if(!CFG.A.has(ap)&&!CFG.B.has(ap)&&!CFG.C.has(ap))violations.push({g:'C부기장 분류외 공항 위반',fl:flt.fl,p:pair,ap:ap});
+          });
+        }
+        [org,dst].forEach(function(ap){
+          if(CFG.A.has(ap)){
+            var cok=capG==='A',fok=foEff==='A'||foEff==='SKIP';
+            var k='aa|'+pair+'|'+ap;
+            if(!seen.aa.has(k)){seen.aa.add(k);aap.push({p:pair,fl:fls,ap:ap,ok:cok&&fok});}
+            if(!cok)violations.push({g:'A공항 기장 등급 위반',fl:flt.fl,p:pair,ap:ap});
+            if(!fok)violations.push({g:'A공항 부기장 등급 위반',fl:flt.fl,p:pair,ap:ap});
+          }
+          if(ap==='CXR'&&CFG.cxrBan.has(capN))internalV.push({h:'CXR 금지',fl:flt.fl,p:b.cap});
+          if(ap==='DAD'&&CFG.dadBan.has(capN))internalV.push({h:'DAD 금지',fl:flt.fl,p:b.cap});
+        });
+        if(CFG.foAonly.has(capN)){
+          if(foEff!=='A')internalV.push({h:capN+' FO제한위반',fl:flt.fl,p:b.fo});
+          else{var iok='io|'+pair;if(!seen.io.has(iok)){seen.io.add(iok);intok.push({cap:b.cap,fl:fls,fo:b.fo,rule:'FO A only'});}}
+        }
+        if(CFG.foABonly.has(capN)){
+          if(!['A','B'].includes(foEff))internalV.push({h:capN+' FO제한위반',fl:flt.fl,p:b.fo});
+          else{var iok2='io|'+pair;if(!seen.io.has(iok2)){seen.io.add(iok2);intok.push({cap:b.cap,fl:fls,fo:b.fo,rule:'FO A/B only'});}}
+        }
+      });
+      if(CFG.qa.has(capN))sp('ℹ️품질심사관',fls,capN);
+      if(CFG.qa.has(foN))sp('ℹ️품질심사관',fls,foN);
+      if(CFG.cp.has(capN))sp('ℹ️노선심사관',fls,capN);
+      if(CFG.cp.has(foN))sp('ℹ️노선심사관',fls,foN);
+      if(foG==='X')sp('DH/훈련',fls,foN);
+      if(b.extra&&b.extra.length){
+        var ng=b.extra.filter(function(e){return getGrade(e)===''&&/^[가-힣]{2,4}$/.test(e);});
+        var g2=b.extra.filter(function(e){return['A','B','C'].includes(getGrade(e));});
+        var gx=b.extra.filter(function(e){return getGrade(e)==='X';});
+        if(ng.length)sp('추가탑승',fls,ng.join(','));
+        if(g2.length)sp('추가탑승',fls,g2.join(','));
+        if(gx.length)sp('DH/훈련',fls,gx.map(function(e){return getName(e);}).join(','));
+      }
+    });
+    return{violations:violations,internalV:internalV,specials:specials,ccap:ccap,cfo:cfo,aap:aap,intok:intok,total:flSet.size};
+  }
+
+  function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+  function row(cells){return '<tr>'+(cells.map(function(c){return'<td>'+c+'</td>';}).join(''))+'</tr>';}
+
+  var STYLE='#_crewck *{box-sizing:border-box}#_crewck .st{display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap}#_crewck .st>div{flex:1;background:#1e3a5f;border-radius:8px;padding:8px;text-align:center}#_crewck .st b{display:block;font-size:18px;font-weight:700}#_crewck .st small{font-size:10px;color:#888}#_crewck .st.bad{background:#5f1e1e}#_crewck .st.bad b{color:#ff6b6b}#_crewck .st.warn{background:#4a3a1e}#_crewck .st.warn b{color:#ffd166}#_crewck .st b.bl{color:#4fc3f7}#_crewck .sec{border-radius:8px;padding:10px;margin-bottom:8px;font-size:11px}#_crewck .sec h4{margin-bottom:6px;font-weight:700;font-size:12px}#_crewck .sec.v{background:#3a1e1e;border:1px solid #ff6b6b44}#_crewck .sec.v h4{color:#ff6b6b}#_crewck .sec.i{background:#3a2e1e;border:1px solid #ffd16644}#_crewck .sec.i h4{color:#ffd166}#_crewck .sec.ok{background:#1e2a1e;border:1px solid #4ade8044}#_crewck .sec.ok h4{color:#86efac}#_crewck .sec.info{background:#1e2a3a}#_crewck .sec.info h4{color:#4fc3f7}#_crewck .sec table{width:100%;border-collapse:collapse}#_crewck .sec td{padding:4px 8px;border-bottom:1px solid #2a2a3e}#_crewck .ok{color:#4ade80}#_crewck .bad{color:#ff6b6b}#_crewck .lbl{color:#aaa;margin:5px 0 3px}#_crewck .none{color:#4ade80;text-align:center;padding:30px;font-size:14px}';
+
+  function render(r){
+    var vc=r.violations.length,ic=r.internalV.length,h='';
+    h+='<div class="st">';
+    h+='<div><b>'+r.total+'</b><small>총편수</small></div>';
+    h+='<div class="'+(vc?'bad':'')+'"><b class="'+(vc?'':'bl')+'">'+vc+'</b><small>규정위반</small></div>';
+    h+='<div class="'+(ic?'warn':'')+'"><b class="'+(ic?'':'bl')+'">'+ic+'</b><small>내부위반</small></div>';
+    h+='<div><b>'+r.specials.length+'</b><small>특이사항</small></div>';
+    h+='</div>';
+    if(vc){
+      h+='<div class="sec v"><h4>🚨 규정 위반 '+vc+'건</h4><table><tbody>';
+      r.violations.forEach(function(v){h+=row(['['+esc(v.fl)+']',esc(v.g)+(v.ap?' ('+v.ap+')':''),esc(v.p)]);});
+      h+='</tbody></table></div>';
+    }
+    if(ic){
+      h+='<div class="sec i"><h4>⚠️ 내부 위반 '+ic+'건</h4><table><tbody>';
+      r.internalV.forEach(function(v){h+=row(['['+esc(v.fl)+']',esc(v.h),esc(v.p)]);});
+      h+='</tbody></table></div>';
+    }
+    if(r.intok.length){
+      h+='<div class="sec ok"><h4>✅ 내부 제한 정상 페어링 '+r.intok.length+'건</h4><table><tbody>';
+      r.intok.forEach(function(x){h+=row([esc(x.cap)+' ('+esc(x.rule)+')',esc(x.fl),esc(x.fo)]);});
+      h+='</tbody></table></div>';
+    }
+    if(r.ccap.length||r.cfo.length||r.aap.length){
+      h+='<div class="sec info"><h4>📋 등급별 편조</h4>';
+      if(r.ccap.length){h+='<div class="lbl">C기장</div><table><tbody>';r.ccap.forEach(function(x){h+=row([esc(x.p),esc(x.fl),x.ok?'<span class="ok">✓정상</span>':'<span class="bad">✗위반</span>']);});h+='</tbody></table>';}
+      if(r.cfo.length){h+='<div class="lbl">C부기장</div><table><tbody>';r.cfo.forEach(function(x){h+=row([esc(x.p),esc(x.fl),x.ok?'<span class="ok">✓정상</span>':'<span class="bad">✗위반</span>']);});h+='</tbody></table>';}
+      if(r.aap.length){h+='<div class="lbl">A공항</div><table><tbody>';r.aap.forEach(function(x){h+=row([esc(x.p),esc(x.fl),esc(x.ap),x.ok?'<span class="ok">✓</span>':'<span class="bad">✗</span>']);});h+='</tbody></table>';}
+      h+='</div>';
+    }
+    if(r.specials.length){
+      h+='<div class="sec ok"><h4>ℹ️ 특이사항</h4><table><tbody>';
+      r.specials.forEach(function(x){h+=row([esc(x.g),esc(x.fl),esc(x.c)]);});
+      h+='</tbody></table></div>';
+    }
+    if(!vc&&!ic&&!r.specials.length)h+='<div class="none">✅ 이상 없음</div>';
+    return h;
+  }
+
+  var result=check(parse(raw));
+  var panel=document.createElement('div');
+  panel.id='_crewck';
+  panel.style.cssText='position:fixed;top:0;right:0;width:480px;max-width:100vw;height:100vh;background:#12122a;color:#e0e0e0;overflow-y:auto;z-index:2147483647;padding:16px;font-family:sans-serif;font-size:12px;box-shadow:-6px 0 24px rgba(0,0,0,.6)';
+  panel.innerHTML='<style>'+STYLE+'</style><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;border-bottom:1px solid #2a2a4a;padding-bottom:10px"><div><div style="font-weight:700;font-size:14px;color:#E4002B">✈ 편조 점검</div><div style="color:#888;font-size:11px">'+date+'</div></div><button onclick="document.getElementById(\'_crewck\').remove()" style="background:none;border:none;color:#888;font-size:18px;cursor:pointer;padding:4px 8px">✕</button></div>'+render(result);
+  document.body.appendChild(panel);
+})();
