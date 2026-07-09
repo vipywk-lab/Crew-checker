@@ -36,8 +36,8 @@
   var date=dm?dm[1].replace(/-/g,'/'):'날짜미상';
 
   var CFG={
-    A:new Set(['YNT','DSN','DAT','CGO','TXN','CGQ','SHE','HRB','MDC','KOJ','KMJ','IZO','TKS','TAE','CXR','DYG','DLC','YNJ','HKG','ALA']),
-    B:new Set(['NTG','NRT','OKA','TSA','DAD','FUK','PUS']),
+    A:new Set(['YNT','DSN','DAT','CGO','TXN','CGQ','SHE','HRB','MDC','KOJ','KMJ','IZO','TKS','TAE','CXR','DYG','DLC','YNJ','HKG','BSZ','ALA','MFM']),
+    B:new Set(['NTG','NRT','OKA','TSA','DAD','FUK','AOJ','PUS']),
     C:new Set(['PVG','KIX','CTS','KUV','ICN','GMP','CJJ','BKK','CNX','TPE','PQC','CJU']),
     cxrBan:new Set(['신윤식','정진우']),
     dadBan:new Set(['장준욱']),
@@ -46,7 +46,7 @@
     qa:new Set(['박지현','신현욱','박승훈','신준서']),
     cp:new Set(['황종식','성기중','이재환','이태우']),
     spBan:new Set(['이주화','양병모','엄태국','김우영','최은총','장재봉','이창민','이한솔','정종성','김공주']),
-    gradeOverride:new Map([['한상일','C'],['이영','B']])
+    gradeOverride:new Map()
   };
 
   function getName(s){return s.replace(/[ABCX](LV|ALV|CLV)?.*$/,'');}
