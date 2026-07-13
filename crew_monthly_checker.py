@@ -1,6 +1,6 @@
 # ==========================================
 # crew_monthly_checker.py
-# 버전: v1.0 (2026-06-24)
+# 버전: v1.1 (2026-07-14)  — crew_check.js v17 과 룰 동기화
 # 기능: CMS 편조점검 월간 자동 조회 (규정위반/내부위반 엑셀 저장)
 # 문의: 승무계획팀
 # ==========================================
@@ -23,8 +23,8 @@ HEADLESS = False
 # 편조점검 설정 (crew_check.js 와 동일)
 # ==========================================
 CFG = {
-    "A": {"YNT","DSN","CGO","TXN","CGQ","SHE","HRB","MDC","KOJ","KMJ","TKS","CXR","DYG","DLC","YNJ","BSZ","ALA","HKG","MFM"},
-    "B": {"NRT","OKA","TSA","DAD","FUK","PUS"},
+    "A": {"YNT","DSN","DAT","CGO","TXN","CGQ","SHE","HRB","MDC","KOJ","KMJ","IZO","TKS","TAE","CXR","DYG","DLC","YNJ","HKG","BSZ","ALA","MFM"},
+    "B": {"NTG","NRT","OKA","TSA","DAD","FUK","AOJ","PUS"},
     "C": {"PVG","KIX","CTS","KUV","ICN","GMP","CJJ","BKK","CNX","TPE","PQC","CJU"},
     "cxrBan" : {"신윤식","정진우"},
     "dadBan" : {"장준욱"},
@@ -32,8 +32,12 @@ CFG = {
     "foABonly":{"신영근"},
     "qa"     : {"박지현","신현욱","박승훈","신준서"},
     "cp"     : {"황종식","성기중","이재환","이태우"},
-    "spBan"  : {"이주화","양병모","엄태국","김우영","최은총","장재봉","이창민","이한솔","정종성","김공주"},
-    "gradeOverride": {"한상일":"C","이영":"B"},
+    # 세이프티 불가 명단 (2026-07-31 기준)
+    "spBan"  : {"김창중","이주화","양병모","엄태국","김우영","최은총","장재봉","이창민",
+                "이한솔","정종성","김공주","김총화","김재영","이웅배","김민재","한다영","최도현"},
+    # 세이프티 예외자 (불가 명단이지만 세이프티 가능)
+    "spOK"   : {"엄태국","양병모"},
+    "gradeOverride": {},
 }
 
 NAME_RE  = re.compile(r'[가-힣]{2,5}(?:[ABCX](?:LV|ALV|CLV)?)?')
@@ -201,14 +205,32 @@ def check(blocks):
         pair   = f"{b['cap']}/{b['fo']}"
         fls    = '/'.join(f['fl'] for f in b['flights'])
 
+        # ── 세이프티 체크 (등급 스킵보다 먼저 수행) ──
+        # 기장/부기장/기타 어느 자리든 무등급(훈련생) 또는 X등급(관숙/DH)이 있으면 감지
+        has_trainee = (
+            cap_g in ('', 'X')
+            or fo_g in ('', 'X')
+            or any(get_grade(e) in ('', 'X') for e in b.get('extra', []))
+        )
+        if has_trainee:
+            for raw in (b['cap'], b['fo']):
+                nm, g = get_name(raw), get_grade(raw)
+                if g in ('', 'X'):          # 본인이 훈련생이면 스킵
+                    continue
+                if nm not in CFG['spBan']:
+                    continue
+                if nm in CFG['spOK']:
+                    internalV.append({'type':'참고','note':True,
+                                      'detail':'SP 예외자 (세이프티 가능 - 조치 불필요)',
+                                      'fl':fls,'pair':f"{nm} / {pair}"})
+                else:
+                    internalV.append({'type':'내부위반',
+                                      'detail':'세이프티 불가자 + 훈련/관숙 동승 (확인 필요)',
+                                      'fl':fls,'pair':f"{nm} / {pair}"})
+
         # 기장 또는 부기장 등급 없으면 훈련생 페어링 → 규정위반 체크 스킵
         if cap_g == '' or (fo_g == '' and fo_eff == ''):
             continue
-
-        if cap_n in CFG['spBan'] and fo_g in ('', 'X'):
-            internalV.append({'type':'내부위반','detail':'SP불가+훈련생페어링','fl':fls,'pair':pair})
-        if fo_n in CFG['spBan'] and cap_g in ('', 'X'):
-            internalV.append({'type':'내부위반','detail':'SP불가+훈련생페어링','fl':fls,'pair':pair})
 
         for flt in b['flights']:
             fl_set.add(flt['fl'])
@@ -277,6 +299,7 @@ def save_excel(all_results, year, month):
     hdr_fill  = PatternFill('solid', start_color='1F3864')
     v_fill    = PatternFill('solid', start_color='3A1E1E')
     i_fill    = PatternFill('solid', start_color='3A2E1E')
+    n_fill    = PatternFill('solid', start_color='1E2A3A')
     center    = Alignment(horizontal='center', vertical='center')
     wrap      = Alignment(wrap_text=True, vertical='center')
 
@@ -308,9 +331,10 @@ def save_excel(all_results, year, month):
             total_v += 1
 
         for v in internalV:
-            fill = i_fill
+            is_note = v.get('note', False)
+            fill = n_fill if is_note else i_fill
             ws.cell(row_idx, 1, date_str).alignment = center
-            ws.cell(row_idx, 2, '⚠️내부위반').alignment = center
+            ws.cell(row_idx, 2, 'ℹ️참고' if is_note else '⚠️내부위반').alignment = center
             ws.cell(row_idx, 3, v['fl']).alignment = center
             ws.cell(row_idx, 4, v['detail']).alignment = wrap
             ws.cell(row_idx, 5, v['pair']).alignment = wrap
@@ -320,7 +344,8 @@ def save_excel(all_results, year, month):
                 ws.cell(row_idx, col).font = Font(name='맑은 고딕', size=10)
             ws.row_dimensions[row_idx].height = 16
             row_idx += 1
-            total_i += 1
+            if not is_note:
+                total_i += 1
 
     if row_idx == 2:
         ws.cell(2, 1, '✅ 위반사항 없음')
@@ -442,12 +467,16 @@ async def main():
 
                 if violations or internalV:
                     all_results.append((date_str, violations, internalV))
-                    print(f"🚨 규정위반 {len(violations)}건 / ⚠️ 내부위반 {len(internalV)}건")
+                    n_int = sum(1 for v in internalV if not v.get('note'))
+                    n_note = len(internalV) - n_int
+                    note_txt = f" / ℹ️ 참고 {n_note}건" if n_note else ''
+                    print(f"🚨 규정위반 {len(violations)}건 / ⚠️ 내부위반 {n_int}건{note_txt}")
                     for v in violations:
                         ap = f" ({v['ap']})" if v.get('ap') else ''
                         print(f"    🚨 [{v['fl']}] {v['detail']}{ap} | {v['pair']}")
                     for v in internalV:
-                        print(f"    ⚠️  [{v['fl']}] {v['detail']} | {v['pair']}")
+                        icon = 'ℹ️ ' if v.get('note') else '⚠️ '
+                        print(f"    {icon} [{v['fl']}] {v['detail']} | {v['pair']}")
                 else:
                     print('✅ 이상없음')
 
