@@ -33,6 +33,8 @@
   if(!rows.length){alert('편조 데이터를 찾을 수 없습니다.');return;}
   var raw=rows.join('\n');
   var dm=location.href.match(/d=(\d{4}-\d{2}-\d{2})/);
+  var VERSION='v17';
+  var UPDATED='2026-07-14';
   var date=dm?dm[1].replace(/-/g,'/'):'날짜미상';
 
   var CFG={
@@ -45,7 +47,8 @@
     foABonly:new Set(['신영근']),
     qa:new Set(['박지현','신현욱','박승훈','신준서']),
     cp:new Set(['황종식','성기중','이재환','이태우']),
-    spBan:new Set(['이주화','양병모','엄태국','김우영','최은총','장재봉','이창민','이한솔','정종성','김공주']),
+    spBan:new Set(['김창중','이주화','양병모','엄태국','김우영','최은총','장재봉','이창민','이한솔','정종성','김공주','김총화','김재영','이웅배','김민재','한다영','최도현']),
+    spOK:new Set(['엄태국','양병모']),
     gradeOverride:new Map()
   };
 
@@ -159,8 +162,16 @@
         }
       });
 
-      if(CFG.spBan.has(capN)&&(foG===''||foG==='X'))internalV.push({h:'SP불가+훈련생페어링',fl:fls,p:pair});
-      if(CFG.spBan.has(foN)&&(capG===''||capG==='X'))internalV.push({h:'SP불가+훈련생페어링',fl:fls,p:pair});
+      var hasTrainee=(capG===''||capG==='X')||(foG===''||foG==='X')||(b.extra||[]).some(function(e){var g=getGrade(e);return g===''||g==='X';});
+      if(hasTrainee){
+        [b.cap,b.fo].forEach(function(rw){
+          var nm=getName(rw),g=getGrade(rw);
+          if(g===''||g==='X')return;
+          if(!CFG.spBan.has(nm))return;
+          if(CFG.spOK.has(nm))sp('ℹ️SP 예외자(세이프티 가능)',fls,nm+' - 훈련/관숙 동승, 세이프티 가능');
+          else internalV.push({h:'세이프티 불가자 + 훈련/관숙 동승 (확인 필요)',fl:fls,p:nm+' / '+pair});
+        });
+      }
       b.flights.forEach(function(flt){
         flSet.add(flt.fl);
         var parts=flt.rt.split('/'),org=parts[0],dst=parts[1];
@@ -275,6 +286,6 @@
   var panel=document.createElement('div');
   panel.id='_crewck';
   panel.style.cssText='position:fixed;top:0;right:0;width:480px;max-width:100vw;height:100vh;background:#12122a;color:#e0e0e0;overflow-y:auto;z-index:2147483647;padding:16px;font-family:sans-serif;font-size:12px;box-shadow:-6px 0 24px rgba(0,0,0,.6)';
-  panel.innerHTML='<style>'+STYLE+'</style><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;border-bottom:1px solid #2a2a4a;padding-bottom:10px"><div><div style="font-weight:700;font-size:14px;color:#E4002B">✈ 편조 점검</div><div style="color:#888;font-size:11px">'+date+'</div></div><button onclick="document.getElementById(\'_crewck\').remove()" style="background:none;border:none;color:#888;font-size:18px;cursor:pointer;padding:4px 8px">✕</button></div>'+render(result);
+  panel.innerHTML='<style>'+STYLE+'</style><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;border-bottom:1px solid #2a2a4a;padding-bottom:10px"><div><div style="font-weight:700;font-size:14px;color:#E4002B">✈ 편조 점검</div><div style="color:#888;font-size:11px">'+date+'</div></div><button onclick="document.getElementById(\'_crewck\').remove()" style="background:none;border:none;color:#888;font-size:18px;cursor:pointer;padding:4px 8px">✕</button></div><div style="background:#1e3a1e;border:1px solid #4ade8033;border-radius:6px;padding:6px 9px;margin-bottom:12px;font-size:10px;color:#86efac;display:flex;justify-content:space-between;align-items:center"><span>✅ 최신본 자동 로드 (GitHub)</span><span style="color:#4ade80;font-weight:700">'+VERSION+' · '+UPDATED+'</span></div>'+render(result);
   document.body.appendChild(panel);
 })();
