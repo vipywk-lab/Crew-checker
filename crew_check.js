@@ -33,9 +33,10 @@
   if(!rows.length){alert('편조 데이터를 찾을 수 없습니다.');return;}
   var raw=rows.join('\n');
   var dm=location.href.match(/d=(\d{4}-\d{2}-\d{2})/);
-  var VERSION='v19';
+  var VERSION='v20';
   var UPDATED='2026-07-15';
   var date=dm?dm[1].replace(/-/g,'/'):'날짜미상';
+  var ym=dm?dm[1].slice(0,7):'';
 
   var CFG={
     A:new Set(['YNT','DSN','DAT','CGO','TXN','CGQ','SHE','HRB','MDC','KOJ','KMJ','IZO','TKS','TAE','CXR','DYG','DLC','YNJ','HKG','BSZ','ALA','MFM']),
@@ -47,10 +48,28 @@
     foABonly:new Set(['신영근']),
     qa:new Set(['박지현','신현욱','박승훈','신준서']),
     cp:new Set(['황종식','성기중','이재환','이태우']),
-    spBan:new Set(['김창중','이주화','양병모','엄태국','김우영','최은총','장재봉','이창민','이한솔','정종성','김공주','김총화','김재영','이웅배','김민재','한다영','최도현']),
-    spOK:new Set(['엄태국','양병모']),
+    spBan:new Set(),
+    spOK:new Set(),
     gradeOverride:new Map()
   };
+  // ── 월별 세이프티(FO) 불가/예외 명단 ──
+  // 조회 중인 스케줄 날짜(URL의 d=YYYY-MM-DD) 기준으로 자동 선택
+  var SP_BY_MONTH={
+    '2026-07':{
+      ban:['김창중','이주화','양병모','엄태국','김우영','최은총','장재봉','이창민','이한솔','정종성','김공주','김총화','김재영','이웅배','김민재','한다영','최도현'],
+      ok:['엄태국','양병모']
+    },
+    '2026-08':{
+      ban:['김창중','이주화','김우영','최은총','장재봉','이창민','이한솔','정종성','김공주','김총화','김재영','이웅배','김민재','최도현'],
+      ok:[]
+    }
+  };
+  var _mk=Object.keys(SP_BY_MONTH).sort();
+  var spKey=SP_BY_MONTH[ym]?ym:(_mk.filter(function(k){return k<=ym;}).pop()||_mk[0]);
+  var spSel=SP_BY_MONTH[spKey];
+  CFG.spBan=new Set(spSel.ban);
+  CFG.spOK=new Set(spSel.ok);
+  var spMonthLabel=spKey.replace('-','.')+' 기준';
   var KR=new Set(['ICN','GMP','CJU','CJJ','KUV','PUS','TAE']);
   function isDom(rt){var p=String(rt||'').split('/');return KR.has(p[0])&&KR.has(p[1]);}
 
@@ -329,7 +348,7 @@
   var panel=document.createElement('div');
   panel.id='_crewck';
   panel.style.cssText='position:fixed;top:0;right:0;width:480px;max-width:100vw;height:100vh;background:#12122a;color:#e0e0e0;overflow-y:auto;z-index:2147483647;padding:16px;font-family:sans-serif;font-size:12px;box-shadow:-6px 0 24px rgba(0,0,0,.6)';
-  var HEAD='<style>'+STYLE+'</style><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;border-bottom:1px solid #2a2a4a;padding-bottom:10px"><div><div style="font-weight:700;font-size:14px;color:#E4002B">✈ 편조 점검</div><div style="color:#888;font-size:11px">'+date+'</div></div><button onclick="document.getElementById(\'_crewck\').remove()" style="background:none;border:none;color:#888;font-size:18px;cursor:pointer;padding:4px 8px">✕</button></div><div style="background:#1e3a1e;border:1px solid #4ade8033;border-radius:6px;padding:6px 9px;margin-bottom:12px;font-size:10px;color:#86efac;display:flex;justify-content:space-between;align-items:center"><span>✅ 최신본 자동 로드 (GitHub)</span><span style="color:#4ade80;font-weight:700">'+VERSION+' · '+UPDATED+'</span></div>';
+  var HEAD='<style>'+STYLE+'</style><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;border-bottom:1px solid #2a2a4a;padding-bottom:10px"><div><div style="font-weight:700;font-size:14px;color:#E4002B">✈ 편조 점검</div><div style="color:#888;font-size:11px">'+date+'</div></div><button onclick="document.getElementById(\'_crewck\').remove()" style="background:none;border:none;color:#888;font-size:18px;cursor:pointer;padding:4px 8px">✕</button></div><div style="background:#1e3a1e;border:1px solid #4ade8033;border-radius:6px;padding:6px 9px;margin-bottom:12px;font-size:10px;color:#86efac;display:flex;justify-content:space-between;align-items:center"><span>✅ 최신본 자동 로드 (GitHub)</span><span style="color:#4ade80;font-weight:700">'+VERSION+' · '+UPDATED+'</span></div><div style="background:#2a1e3a;border:1px solid #a855f733;border-radius:6px;padding:6px 9px;margin-bottom:12px;font-size:10px;color:#c4a5f7;display:flex;justify-content:space-between;align-items:center"><span>🛡️ 세이프티(FO) 명단 기준</span><span style="color:#c4a5f7;font-weight:700">'+spMonthLabel+'</span></div>';
 
   var mode='all';
   function draw(){
