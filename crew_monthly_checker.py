@@ -1,7 +1,9 @@
 # ==========================================
 # crew_monthly_checker.py
-# 버전: v1.1 (2026-07-14)  — crew_check.js v17 과 룰 동기화
-# 기능: CMS 편조점검 월간 자동 조회 (규정위반/내부위반 엑셀 저장)
+# 버전: v1.2 (2026-07-20)  — crew_check.js v18 과 룰 동기화
+#   - LV(저시정) / 품질심사관·노선심사관 / DH·훈련 / 추가탑승 특이사항 추가
+#   - 국내선·국제선 구분 컬럼 추가
+# 기능: CMS 편조점검 월간 자동 조회 (규정위반/내부위반/참고 엑셀 저장)
 # 문의: 승무계획팀
 # ==========================================
 import asyncio
@@ -58,6 +60,20 @@ def get_grade(s):
 
 def is_junk(s):
     return bool(re.match(r'^\d{1,2}/\d{1,2}', s)) or '편조' in s or '점검' in s or len(s) == 0
+
+# 국내선 판별 (crew_check.js 와 동일 기준)
+KR = {"ICN", "GMP", "CJU", "CJJ", "KUV", "PUS", "TAE"}
+
+def is_dom(rt):
+    p = str(rt or '').split('/')
+    return len(p) > 1 and p[0] in KR and p[1] in KR
+
+# LV(저시정 운항 제한) 판별
+LV_RE = re.compile(r'^[가-힣]{2,5}[ABCX](LV|ALV|CLV)$')
+
+def get_lv_suffix(s):
+    m = LV_RE.match(s)
+    return m.group(1) if m else ''
 
 def parse_table(html):
     soup = BeautifulSoup(html, 'html.parser')
@@ -197,6 +213,13 @@ def check(blocks):
     for b in blocks:
         if b.get('isSolo'):
             fl_set.update(f['fl'] for f in b['flights'])
+            fls0 = '/'.join(f['fl'] for f in b['flights'])
+            dom0 = bool(b['flights']) and all(is_dom(f['rt']) for f in b['flights'])
+            for n in b.get('names', []):
+                g = get_grade(n)
+                label = 'DH/훈련' if g == 'X' else '추가 탑승'
+                internalV.append({'type':'참고','note':True,'detail':label,
+                                  'fl':fls0,'pair':get_name(n),'dom':dom0})
             continue
 
         cap_n, cap_g = get_name(b['cap']), get_grade(b['cap'])
@@ -204,6 +227,7 @@ def check(blocks):
         fo_eff = 'SKIP' if fo_g == 'X' else (fo_g if fo_g else '')
         pair   = f"{b['cap']}/{b['fo']}"
         fls    = '/'.join(f['fl'] for f in b['flights'])
+        cur_dom = bool(b['flights']) and all(is_dom(f['rt']) for f in b['flights'])
 
         # ── 세이프티 체크 (등급 스킵보다 먼저 수행) ──
         # 기장/부기장/기타 어느 자리든 무등급(훈련생) 또는 X등급(관숙/DH)이 있으면 감지
@@ -222,70 +246,101 @@ def check(blocks):
                 if nm in CFG['spOK']:
                     internalV.append({'type':'참고','note':True,
                                       'detail':'SP 예외자 (세이프티 가능 - 조치 불필요)',
-                                      'fl':fls,'pair':f"{nm} / {pair}"})
+                                      'fl':fls,'pair':f"{nm} / {pair}",'dom':cur_dom})
                 else:
                     internalV.append({'type':'내부위반',
                                       'detail':'세이프티 불가자 + 훈련/관숙 동승 (확인 필요)',
-                                      'fl':fls,'pair':f"{nm} / {pair}"})
+                                      'fl':fls,'pair':f"{nm} / {pair}",'dom':cur_dom})
 
-        # 기장 또는 부기장 등급 없으면 훈련생 페어링 → 규정위반 체크 스킵
-        if cap_g == '' or (fo_g == '' and fo_eff == ''):
-            continue
+        # 기장 또는 부기장 등급 없으면 훈련생 페어링 → 규정위반 체크만 스킵 (특이사항은 아래에서 계속 수집)
+        skip_rule_check = cap_g == '' or (fo_g == '' and fo_eff == '')
 
-        for flt in b['flights']:
-            fl_set.add(flt['fl'])
-            org, dst = flt['rt'].split('/') if '/' in flt['rt'] else (flt['rt'], '')
+        if not skip_rule_check:
+            for flt in b['flights']:
+                fl_set.add(flt['fl'])
+                org, dst = flt['rt'].split('/') if '/' in flt['rt'] else (flt['rt'], '')
 
-            if cap_g == 'C':
-                ok = fo_eff == 'A'
-                if not ok and fo_eff in ('SKIP', ''):
-                    obs = next((e for e in b.get('extra',[]) if get_grade(e) == 'A'), None)
-                    if obs: ok = True
-                ck = f"cc|{pair}"
-                if ck not in seen['cc']:
-                    seen['cc'].add(ck)
-                if not ok:
-                    msg = 'C기장 관숙 편성 위반(FO A 동승 필요)' if fo_eff in ('SKIP','') else 'C기장 페어링 위반'
-                    violations.append({'type':'규정위반','detail':msg,'fl':flt['fl'],'pair':pair,'ap':''})
+                if cap_g == 'C':
+                    ok = fo_eff == 'A'
+                    if not ok and fo_eff in ('SKIP', ''):
+                        obs = next((e for e in b.get('extra',[]) if get_grade(e) == 'A'), None)
+                        if obs: ok = True
+                    ck = f"cc|{pair}"
+                    if ck not in seen['cc']:
+                        seen['cc'].add(ck)
+                    if not ok:
+                        msg = 'C기장 관숙 편성 위반(FO A 동승 필요)' if fo_eff in ('SKIP','') else 'C기장 페어링 위반'
+                        violations.append({'type':'규정위반','detail':msg,'fl':flt['fl'],'pair':pair,'ap':'','dom':cur_dom})
+                    for ap in (org, dst):
+                        if ap in CFG['B']:
+                            violations.append({'type':'규정위반','detail':'B공항 C기장 위반','fl':flt['fl'],'pair':pair,'ap':ap,'dom':cur_dom})
+                        if ap and ap not in CFG['A'] and ap not in CFG['B'] and ap not in CFG['C']:
+                            violations.append({'type':'규정위반','detail':'C기장 분류외 공항 위반','fl':flt['fl'],'pair':pair,'ap':ap,'dom':cur_dom})
+
+                if fo_eff == 'C':
+                    ok2 = cap_g == 'A'
+                    ck2 = f"cf|{pair}"
+                    if ck2 not in seen['cf']:
+                        seen['cf'].add(ck2)
+                    if not ok2:
+                        violations.append({'type':'규정위반','detail':'C부기장 페어링 위반','fl':flt['fl'],'pair':pair,'ap':'','dom':cur_dom})
+                    for ap in (org, dst):
+                        if ap and ap not in CFG['A'] and ap not in CFG['B'] and ap not in CFG['C']:
+                            violations.append({'type':'규정위반','detail':'C부기장 분류외 공항 위반','fl':flt['fl'],'pair':pair,'ap':ap,'dom':cur_dom})
+
                 for ap in (org, dst):
-                    if ap in CFG['B']:
-                        violations.append({'type':'규정위반','detail':'B공항 C기장 위반','fl':flt['fl'],'pair':pair,'ap':ap})
-                    if ap and ap not in CFG['A'] and ap not in CFG['B'] and ap not in CFG['C']:
-                        violations.append({'type':'규정위반','detail':'C기장 분류외 공항 위반','fl':flt['fl'],'pair':pair,'ap':ap})
+                    if ap in CFG['A']:
+                        cok = cap_g == 'A'
+                        fok = fo_eff in ('A', 'SKIP')
+                        k = f"aa|{pair}|{ap}"
+                        if k not in seen['aa']:
+                            seen['aa'].add(k)
+                        if not cok:
+                            violations.append({'type':'규정위반','detail':'A공항 기장 등급 위반','fl':flt['fl'],'pair':pair,'ap':ap,'dom':cur_dom})
+                        if not fok:
+                            violations.append({'type':'규정위반','detail':'A공항 부기장 등급 위반','fl':flt['fl'],'pair':pair,'ap':ap,'dom':cur_dom})
+                    if ap == 'CXR' and cap_n in CFG['cxrBan']:
+                        internalV.append({'type':'내부위반','detail':'CXR 금지','fl':flt['fl'],'pair':b['cap'],'ap':'','dom':cur_dom})
+                    if ap == 'DAD' and cap_n in CFG['dadBan']:
+                        internalV.append({'type':'내부위반','detail':'DAD 금지','fl':flt['fl'],'pair':b['cap'],'ap':'','dom':cur_dom})
 
-            if fo_eff == 'C':
-                ok2 = cap_g == 'A'
-                ck2 = f"cf|{pair}"
-                if ck2 not in seen['cf']:
-                    seen['cf'].add(ck2)
-                if not ok2:
-                    violations.append({'type':'규정위반','detail':'C부기장 페어링 위반','fl':flt['fl'],'pair':pair,'ap':''})
-                for ap in (org, dst):
-                    if ap and ap not in CFG['A'] and ap not in CFG['B'] and ap not in CFG['C']:
-                        violations.append({'type':'규정위반','detail':'C부기장 분류외 공항 위반','fl':flt['fl'],'pair':pair,'ap':ap})
+                if cap_n in CFG['foAonly']:
+                    if fo_eff != 'A':
+                        internalV.append({'type':'내부위반','detail':f'{cap_n} FO제한위반','fl':flt['fl'],'pair':b['fo'],'ap':'','dom':cur_dom})
+                if cap_n in CFG['foABonly']:
+                    if fo_eff not in ('A','B'):
+                        internalV.append({'type':'내부위반','detail':f'{cap_n} FO제한위반','fl':flt['fl'],'pair':b['fo'],'ap':'','dom':cur_dom})
+        else:
+            fl_set.update(f['fl'] for f in b['flights'])
 
-            for ap in (org, dst):
-                if ap in CFG['A']:
-                    cok = cap_g == 'A'
-                    fok = fo_eff in ('A', 'SKIP')
-                    k = f"aa|{pair}|{ap}"
-                    if k not in seen['aa']:
-                        seen['aa'].add(k)
-                    if not cok:
-                        violations.append({'type':'규정위반','detail':'A공항 기장 등급 위반','fl':flt['fl'],'pair':pair,'ap':ap})
-                    if not fok:
-                        violations.append({'type':'규정위반','detail':'A공항 부기장 등급 위반','fl':flt['fl'],'pair':pair,'ap':ap})
-                if ap == 'CXR' and cap_n in CFG['cxrBan']:
-                    internalV.append({'type':'내부위반','detail':'CXR 금지','fl':flt['fl'],'pair':b['cap'],'ap':''})
-                if ap == 'DAD' and cap_n in CFG['dadBan']:
-                    internalV.append({'type':'내부위반','detail':'DAD 금지','fl':flt['fl'],'pair':b['cap'],'ap':''})
-
-            if cap_n in CFG['foAonly']:
-                if fo_eff != 'A':
-                    internalV.append({'type':'내부위반','detail':f'{cap_n} FO제한위반','fl':flt['fl'],'pair':b['fo'],'ap':''})
-            if cap_n in CFG['foABonly']:
-                if fo_eff not in ('A','B'):
-                    internalV.append({'type':'내부위반','detail':f'{cap_n} FO제한위반','fl':flt['fl'],'pair':b['fo'],'ap':''})
+        # ── 특이사항 (참고, 페어링당 1회) ──
+        if cap_n in CFG['qa']:
+            internalV.append({'type':'참고','note':True,'detail':'ℹ️품질심사관','fl':fls,'pair':cap_n,'dom':cur_dom})
+        if fo_n in CFG['qa']:
+            internalV.append({'type':'참고','note':True,'detail':'ℹ️품질심사관','fl':fls,'pair':fo_n,'dom':cur_dom})
+        if cap_n in CFG['cp']:
+            internalV.append({'type':'참고','note':True,'detail':'ℹ️노선심사관','fl':fls,'pair':cap_n,'dom':cur_dom})
+        if fo_n in CFG['cp']:
+            internalV.append({'type':'참고','note':True,'detail':'ℹ️노선심사관','fl':fls,'pair':fo_n,'dom':cur_dom})
+        for rw in [b['cap'], b['fo']] + list(b.get('extra', [])):
+            lv = get_lv_suffix(rw)
+            if lv:
+                internalV.append({'type':'참고','note':True,'detail':'🌫️LV 저시정 제한',
+                                  'fl':fls,'pair':f"{get_name(rw)} ({get_grade(rw)}{lv})",'dom':cur_dom})
+        if fo_g == 'X':
+            internalV.append({'type':'참고','note':True,'detail':'DH/훈련','fl':fls,'pair':fo_n,'dom':cur_dom})
+        extra = b.get('extra', [])
+        if extra:
+            ng = [e for e in extra if get_grade(e) == '' and re.match(r'^[가-힣]{2,4}$', e)]
+            g2 = [e for e in extra if get_grade(e) in ('A', 'B', 'C')]
+            gx = [e for e in extra if get_grade(e) == 'X']
+            if ng:
+                internalV.append({'type':'참고','note':True,'detail':'추가탑승','fl':fls,'pair':','.join(ng),'dom':cur_dom})
+            if g2:
+                internalV.append({'type':'참고','note':True,'detail':'추가탑승','fl':fls,'pair':','.join(g2),'dom':cur_dom})
+            if gx:
+                internalV.append({'type':'참고','note':True,'detail':'DH/훈련','fl':fls,
+                                  'pair':','.join(get_name(e) for e in gx),'dom':cur_dom})
 
     return violations, internalV
 
@@ -303,8 +358,8 @@ def save_excel(all_results, year, month):
     center    = Alignment(horizontal='center', vertical='center')
     wrap      = Alignment(wrap_text=True, vertical='center')
 
-    headers = ['날짜', '구분', '편명', '위반유형', '페어링', '공항']
-    widths  = [12,     8,     12,     32,         28,       8]
+    headers = ['날짜', '구분', '편명', '위반유형', '페어링', '공항', '국내/국제']
+    widths  = [12,     8,     12,     32,         28,       8,    10]
     for col, (h, w) in enumerate(zip(headers, widths), 1):
         c = ws.cell(1, col, h)
         c.font, c.fill, c.alignment = hdr_font, hdr_fill, center
@@ -323,7 +378,8 @@ def save_excel(all_results, year, month):
             ws.cell(row_idx, 4, v['detail']).alignment = wrap
             ws.cell(row_idx, 5, v['pair']).alignment = wrap
             ws.cell(row_idx, 6, v.get('ap','')).alignment = center
-            for col in range(1, 7):
+            ws.cell(row_idx, 7, '국내선' if v.get('dom') else '국제선').alignment = center
+            for col in range(1, 8):
                 ws.cell(row_idx, col).fill = fill
                 ws.cell(row_idx, col).font = Font(name='맑은 고딕', size=10)
             ws.row_dimensions[row_idx].height = 16
@@ -339,7 +395,8 @@ def save_excel(all_results, year, month):
             ws.cell(row_idx, 4, v['detail']).alignment = wrap
             ws.cell(row_idx, 5, v['pair']).alignment = wrap
             ws.cell(row_idx, 6, v.get('ap','')).alignment = center
-            for col in range(1, 7):
+            ws.cell(row_idx, 7, '국내선' if v.get('dom') else '국제선').alignment = center
+            for col in range(1, 8):
                 ws.cell(row_idx, col).fill = fill
                 ws.cell(row_idx, col).font = Font(name='맑은 고딕', size=10)
             ws.row_dimensions[row_idx].height = 16
@@ -350,6 +407,8 @@ def save_excel(all_results, year, month):
     if row_idx == 2:
         ws.cell(2, 1, '✅ 위반사항 없음')
         ws.cell(2, 1).font = Font(name='맑은 고딕', bold=True, color='4ADE80', size=11)
+    else:
+        ws.auto_filter.ref = f"A1:{ws.cell(1, len(headers)).column_letter}{row_idx - 1}"
 
     # 요약 시트
     ws2 = wb.create_sheet('요약')
@@ -410,8 +469,8 @@ def get_target_month():
 
 async def main():
     print('='*50)
-    print('✈  편조점검 월간 자동 조회 v1.0')
-    print('   (2026-06-24) | 문의: 승무계획팀')
+    print('✈  편조점검 월간 자동 조회 v1.2')
+    print('   (2026-07-20) | 문의: 승무계획팀')
     print('='*50)
 
     today = datetime.now()
