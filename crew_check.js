@@ -47,7 +47,7 @@
   var raw=rows.join('\n');
   var dm=location.href.match(/d=(\d{4}-\d{2}-\d{2})/);
   var VERSION='v22';
-  var UPDATED='2026-07-16';
+  var UPDATED='2026-08-11';
   var date=dm?dm[1].replace(/-/g,'/'):'날짜미상';
   var ym=dm?dm[1].slice(0,7):'';
 
