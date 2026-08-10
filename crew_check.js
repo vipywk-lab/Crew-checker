@@ -33,14 +33,14 @@
   if(!rows.length){alert('편조 데이터를 찾을 수 없습니다.');return;}
   var raw=rows.join('\n');
   var dm=location.href.match(/d=(\d{4}-\d{2}-\d{2})/);
-  var VERSION='v20';
-  var UPDATED='2026-07-15';
+  var VERSION='v21';
+  var UPDATED='2026-07-16';
   var date=dm?dm[1].replace(/-/g,'/'):'날짜미상';
   var ym=dm?dm[1].slice(0,7):'';
 
   var CFG={
-    A:new Set(['YNT','DSN','DAT','CGO','TXN','CGQ','SHE','HRB','MDC','KOJ','KMJ','IZO','TKS','TAE','CXR','DYG','DLC','YNJ','HKG','BSZ','ALA','MFM']),
-    B:new Set(['NTG','NRT','OKA','TSA','DAD','FUK','AOJ','PUS']),
+    A:new Set(['YNT','DSN','DAT','CGO','NGB','TXN','CGQ','SHE','HRB','MDC','KOJ','KMJ','IZO','TKS','TAE','CXR','DYG','DLC','YNJ','HKG','BSZ','ALA','MFM']),
+    B:new Set(['NTG','HET','NRT','OKA','TSA','DAD','FUK','AOJ','PUS']),
     C:new Set(['PVG','KIX','CTS','KUV','ICN','GMP','CJJ','BKK','CNX','TPE','PQC','CJU']),
     cxrBan:new Set(['신윤식','정진우']),
     dadBan:new Set(['장준욱']),
@@ -62,10 +62,16 @@
     '2026-08':{
       ban:['김창중','이주화','김우영','최은총','장재봉','이창민','이한솔','정종성','김공주','김총화','김재영','이웅배','김민재','최도현'],
       ok:[]
+    },
+    '2026-09':{
+      ban:['김창중','최은총','장재봉','이창민','이한솔','정종성','김공주','김총화','김재영','이웅배','김민재','최도현','이재현','윤동건','한건희','박신우','배민수','진석준'],
+      ok:[]
     }
   };
   var _mk=Object.keys(SP_BY_MONTH).sort();
-  var spKey=SP_BY_MONTH[ym]?ym:(_mk.filter(function(k){return k<=ym;}).pop()||_mk[0]);
+  var spKey = !ym ? _mk[_mk.length-1]
+            : (SP_BY_MONTH[ym] ? ym
+            : (_mk.filter(function(k){return k<=ym;}).pop()||_mk[0]));
   var spSel=SP_BY_MONTH[spKey];
   CFG.spBan=new Set(spSel.ban);
   CFG.spOK=new Set(spSel.ok);
