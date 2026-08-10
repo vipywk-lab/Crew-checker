@@ -1,9 +1,22 @@
 (function(){
   if(document.getElementById('_crewck')){document.getElementById('_crewck').remove();return;}
   var tables=document.querySelectorAll('table');
-  if(!tables[1]){alert('편조 데이터를 찾을 수 없습니다.\n스케줄 페이지(CrewPairList.php)가 맞는지 확인해주세요.');return;}
+  // 편조 테이블 자동 탐색: 노선 패턴(XXX/XXX)이 가장 많은 테이블 선택.
+  // CMS 구조가 바뀌어 못 찾으면 기존 방식(tables[1])으로 폴백.
+  function pickTable(ts){
+    var best=null,bestScore=0;
+    for(var i=0;i<ts.length;i++){
+      var txt=ts[i].textContent||'';
+      var mm=txt.match(/[A-Z]{3,4}\/[A-Z]{3,4}/g);
+      var score=mm?mm.length:0;
+      if(score>bestScore){bestScore=score;best=ts[i];}
+    }
+    return bestScore>=3?best:(ts[1]||null);
+  }
+  var TB=pickTable(tables);
+  if(!TB){alert('편조 데이터를 찾을 수 없습니다.\n스케줄 페이지(CrewPairList.php)가 맞는지 확인해주세요.');return;}
   var rows=[];
-  tables[1].querySelectorAll('tr').forEach(function(tr){
+  TB.querySelectorAll('tr').forEach(function(tr){
     var cells=tr.cells;
     if(!cells||cells.length<3){
       var t=tr.textContent.replace(/[\t\n\r]+/g,' ').replace(/ {2,}/g,' ').trim();
@@ -33,7 +46,7 @@
   if(!rows.length){alert('편조 데이터를 찾을 수 없습니다.');return;}
   var raw=rows.join('\n');
   var dm=location.href.match(/d=(\d{4}-\d{2}-\d{2})/);
-  var VERSION='v21';
+  var VERSION='v22';
   var UPDATED='2026-07-16';
   var date=dm?dm[1].replace(/-/g,'/'):'날짜미상';
   var ym=dm?dm[1].slice(0,7):'';
