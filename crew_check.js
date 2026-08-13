@@ -20,7 +20,7 @@
     var cells=tr.cells;
     if(!cells||cells.length<3){
       var t=tr.textContent.replace(/[\t\n\r]+/g,' ').replace(/ {2,}/g,' ').trim();
-      if(t)rows.push(t);
+      if(t)rows.push({line:t,hasCap:true});
       return;
     }
     var cellTxt=function(c){return c.textContent.replace(/[\t\n\r]+/g,' ').replace(/ {2,}/g,' ').trim();};
@@ -41,12 +41,12 @@
     }
     ordered=ordered.concat(extras);
     var line=(ordered.join(' ')+rest).trim();
-    if(line)rows.push(line);
+    if(line)rows.push({line:line,hasCap:caps.length>0});
   });
   if(!rows.length){alert('편조 데이터를 찾을 수 없습니다.');return;}
-  var raw=rows.join('\n');
+  var raw=rows;
   var dm=location.href.match(/d=(\d{4}-\d{2}-\d{2})/);
-  var VERSION='v22';
+  var VERSION='v23';
   var UPDATED='2026-08-11';
   var date=dm?dm[1].replace(/-/g,'/'):'날짜미상';
   var ym=dm?dm[1].slice(0,7):'';
@@ -105,62 +105,66 @@
   }
   function isJunk(s){return /^\d{1,2}\/\d{1,2}/.test(s)||/편조/.test(s)||/점검/.test(s)||s.length===0;}
 
-  function parse(raw){
-    var lines=raw.split('\n').map(function(s){return s.trim();}).filter(function(s){return s.length>0;});
+  function parse(rowObjs){
+    // LV 단독 라인은 앞 행 마지막 이름에 병합
     var merged=[];
-    lines.forEach(function(L){
-      if(/^LV$/.test(L)&&merged.length>0&&/[가-힣]{2,5}[ABCX]?$/.test(merged[merged.length-1]))merged[merged.length-1]+=L;
-      else merged.push(L);
+    rowObjs.forEach(function(o){
+      var L=o.line;
+      if(/^LV$/.test(L)&&merged.length>0&&/[가-힣]{2,5}[ABCX]?$/.test(merged[merged.length-1].line)){
+        merged[merged.length-1].line+=L;
+      }else merged.push({line:L,hasCap:o.hasCap});
     });
-    var clean=merged.filter(function(L){return !isJunk(L);});
-    var typed=[];
-    clean.forEach(function(line){
-      var allRe=/(\d{2}:\d{2})|([A-Z]{3,4}\/[A-Z]{3,4})|(\d{3,4})(?![\d:])|([가-힣]{2,5}([ABCX](LV)?)?)/g,m;
-      while((m=allRe.exec(line))!==null){
+    var clean=merged.filter(function(o){return !isJunk(o.line);});
+    // 각 행(line)을 하나의 block으로 파싱 (line=block 1:1), hasCap 보존
+    var blocks=[];
+    clean.forEach(function(o){
+      var allRe=/(\d{2}:\d{2})|([A-Z]{3,4}\/[A-Z]{3,4})|(\d{3,4})(?![\d:])|([가-힣]{2,5}([ABCX](LV)?)?)/g,m,typed=[];
+      while((m=allRe.exec(o.line))!==null){
         if(m[1])typed.push({t:'time',v:m[1]});
         else if(m[2])typed.push({t:'route',v:m[2]});
         else if(m[3])typed.push({t:'flight',v:m[3]});
         else if(m[4])typed.push({t:'name',v:m[4]});
       }
+      var names=[],flights=[],i=0,N=typed.length;
+      while(i<N&&typed[i].t==='name'){names.push(typed[i].v);i++;}
+      while(i<N){
+        if(typed[i].t==='flight'){
+          var f=typed[i].v;i++;
+          if(i<N&&typed[i].t==='route'){var r=typed[i].v;i++;while(i<N&&typed[i].t==='time')i++;flights.push({fl:f,rt:r});}
+        }else i++;
+      }
+      if(names.length||flights.length)blocks.push({names:names,flights:flights,hasCap:o.hasCap});
     });
-    var blocks=[],i=0,N=typed.length;
-    while(i<N){
-      var ns=[];
-      while(i<N&&typed[i].t==='name'){ns.push(typed[i].v);i++;}
-      if(!ns.length){
-        var fl0=[];
-        while(i<N&&typed[i].t==='flight'){
-          var f0=typed[i].v;i++;
-          if(i<N&&typed[i].t==='route'){var r0=typed[i].v;i++;while(i<N&&typed[i].t==='time')i++;fl0.push({fl:f0,rt:r0});}
-        }
-        if(fl0.length&&blocks.length)blocks[blocks.length-1].flights.push.apply(blocks[blocks.length-1].flights,fl0);
-        while(i<N&&typed[i].t!=='name'&&typed[i].t!=='flight')i++;
-        continue;
-      }
-      var fl1=[];
-      while(i<N&&typed[i].t==='flight'){
-        var f1=typed[i].v;i++;
-        if(i<N&&typed[i].t==='route'){var r1=typed[i].v;i++;while(i<N&&typed[i].t==='time')i++;fl1.push({fl:f1,rt:r1});}
-      }
-      blocks.push({names:ns,flights:fl1});
-    }
-    var mains=[],solos=[];
+    // 편명만 있고 이름 없는 block은 앞 block에 편명 흡수 (연속 편명 대응)
+    var blk2=[];
     blocks.forEach(function(b){
-      if(b.names.length>=2)mains.push({cap:b.names[0],fo:b.names[1],extra:b.names.slice(2),flights:b.flights});
-      else if(b.names.length===1&&b.flights.length>0)solos.push(b);
+      if(!b.names.length&&b.flights.length&&blk2.length){
+        blk2[blk2.length-1].flights.push.apply(blk2[blk2.length-1].flights,b.flights);
+      }else if(b.names.length)blk2.push(b);
     });
-    solos.forEach(function(s){
-      var sfl=new Set(s.flights.map(function(f){return f.fl;})),best=null,bsc=-1;
+    // 분류: 기장셀 있는 행 → main / 기장셀 없는 행 → pending(부분합류 후보)
+    var mains=[],pending=[],solos=[];
+    blk2.forEach(function(b){
+      if(b.hasCap)mains.push({cap:b.names[0],fo:b.names[1]||'',extra:b.names.slice(2),flights:b.flights});
+      else pending.push(b);
+    });
+    // 부분합류 병합: 기장 없는 행을 편명 겹치는 편조에 붙임
+    pending.forEach(function(p){
+      var allXorNograde=p.names.every(function(n){var g=getGrade(n);return g==='X'||g==='';});
+      if(allXorNograde){p.asSolo=true;solos.push(p);return;} // 무등급/X 전원 → 실제구간 보존 위해 별도 표시
+      var pfl=new Set(p.flights.map(function(f){return f.fl;})),target=null,best=0;
       mains.forEach(function(m){
         var mfl=new Set(m.flights.map(function(f){return f.fl;})),cnt=0;
-        sfl.forEach(function(f){if(mfl.has(f))cnt++;});
-        if(cnt===sfl.size&&cnt>bsc){best=m;bsc=cnt;}
+        pfl.forEach(function(f){if(mfl.has(f))cnt++;});
+        if(cnt>best){best=cnt;target=m;}
       });
-      var allXorNograde=s.names.every(function(n){var g=getGrade(n);return g==='X'||g==='';});
-      if(allXorNograde)s.asSolo=true;
-      else if(best)best.extra.push.apply(best.extra,s.names);
-      else s.asSolo=true;
+      if(target&&best>0){
+        p.names.forEach(function(nm){if(!target.fo)target.fo=nm;else target.extra.push(nm);});
+      }else if(p.names.length>=2){
+        mains.push({cap:p.names[0],fo:p.names[1],extra:p.names.slice(2),flights:p.flights});
+      }else{p.asSolo=true;solos.push(p);}
     });
+    // 4인편성 split
     var result=[];
     mains.forEach(function(m){
       var all=[m.cap,m.fo].concat(m.extra);
@@ -213,7 +217,7 @@
 
       var hasTrainee=(capG===''||capG==='X')||(foG===''||foG==='X')||(b.extra||[]).some(function(e){var g=getGrade(e);return g===''||g==='X';});
       if(hasTrainee){
-        [b.cap,b.fo].forEach(function(rw){
+        [b.cap,b.fo].concat(b.extra||[]).forEach(function(rw){
           var nm=getName(rw),g=getGrade(rw);
           if(g===''||g==='X')return;
           if(!CFG.spBan.has(nm))return;
