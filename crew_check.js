@@ -46,8 +46,8 @@
   if(!rows.length){alert('편조 데이터를 찾을 수 없습니다.');return;}
   var raw=rows;
   var dm=location.href.match(/d=(\d{4}-\d{2}-\d{2})/);
-  var VERSION='v23';
-  var UPDATED='2026-08-11';
+  var VERSION='v24';
+  var UPDATED='2026-08-13';
   var date=dm?dm[1].replace(/-/g,'/'):'날짜미상';
   var ym=dm?dm[1].slice(0,7):'';
 
@@ -143,12 +143,14 @@
       }else if(b.names.length)blk2.push(b);
     });
     // 분류: 기장셀 있는 행 → main / 기장셀 없는 행 → pending(부분합류 후보)
+    function mkLegs(flights,fo,extra){return flights.map(function(f){return{fl:f.fl,rt:f.rt,fo:fo||'',extra:(extra||[]).slice()};});}
     var mains=[],pending=[],solos=[];
     blk2.forEach(function(b){
-      if(b.hasCap)mains.push({cap:b.names[0],fo:b.names[1]||'',extra:b.names.slice(2),flights:b.flights});
+      if(b.hasCap)mains.push({cap:b.names[0],fo:b.names[1]||'',extra:b.names.slice(2),flights:b.flights,
+        legs:mkLegs(b.flights,b.names[1],b.names.slice(2))});
       else pending.push(b);
     });
-    // 부분합류 병합: 기장 없는 행을 편명 겹치는 편조에 붙임
+    // 부분합류 병합: 기장 없는 행을 편명 겹치는 편조에 붙임 (레그 단위로 정확히 담당자 반영)
     pending.forEach(function(p){
       var allXorNograde=p.names.every(function(n){var g=getGrade(n);return g==='X'||g==='';});
       if(allXorNograde){p.asSolo=true;solos.push(p);return;} // 무등급/X 전원 → 실제구간 보존 위해 별도 표시
@@ -159,9 +161,12 @@
         if(cnt>best){best=cnt;target=m;}
       });
       if(target&&best>0){
-        p.names.forEach(function(nm){if(!target.fo)target.fo=nm;else target.extra.push(nm);});
+        var pFo=p.names[0],pExtra=p.names.slice(1);
+        target.legs.forEach(function(leg){if(pfl.has(leg.fl)){leg.fo=pFo;leg.extra=pExtra;}});
+        p.names.forEach(function(nm){if(!target.fo)target.fo=nm;else target.extra.push(nm);}); // 대표 표시값
       }else if(p.names.length>=2){
-        mains.push({cap:p.names[0],fo:p.names[1],extra:p.names.slice(2),flights:p.flights});
+        mains.push({cap:p.names[0],fo:p.names[1],extra:p.names.slice(2),flights:p.flights,
+          legs:mkLegs(p.flights,p.names[1],p.names.slice(2))});
       }else{p.asSolo=true;solos.push(p);}
     });
     // 4인편성 split
@@ -171,14 +176,26 @@
       var graded=all.filter(function(n){return['A','B','C'].includes(getGrade(n));});
       var nograde=all.filter(function(n){return!['A','B','C'].includes(getGrade(n))&&getGrade(n)!=='X';});
       if(graded.length>=4){
-        result.push({cap:graded[0],fo:graded[1],extra:nograde,flights:m.flights});
-        result.push({cap:graded[2],fo:graded[3],extra:[],flights:m.flights});
+        result.push({cap:graded[0],fo:graded[1],extra:nograde,flights:m.flights,legs:mkLegs(m.flights,graded[1],nograde)});
+        result.push({cap:graded[2],fo:graded[3],extra:[],flights:m.flights,legs:mkLegs(m.flights,graded[3],[])});
       }else result.push(m);
     });
     solos.forEach(function(s){
       if(s.asSolo)result.push({isSolo:true,names:s.names,flights:s.flights});
     });
     return result;
+  }
+
+  function groupLegs(legs){
+    // fo/extra 조합이 같은 연속 레그를 하나의 그룹으로 묶음 (실제 담당 구간 기준)
+    var groups=[];
+    (legs||[]).forEach(function(leg){
+      var key=leg.fo+'|'+leg.extra.join(',');
+      var last=groups[groups.length-1];
+      if(last&&last.key===key){last.flights.push({fl:leg.fl,rt:leg.rt});}
+      else groups.push({key:key,fo:leg.fo,extra:leg.extra,flights:[{fl:leg.fl,rt:leg.rt}]});
+    });
+    return groups;
   }
 
   function check(blocks){
@@ -198,98 +215,110 @@
         });
         return;
       }
-      var capN=getName(b.cap),capG=getGrade(b.cap),foN=getName(b.fo),foG=getGrade(b.fo);
-      var foEff=(foG===''||foG==='X')?(foG==='X'?'SKIP':''):foG;
-      var pair=b.cap+'/'+b.fo,fls=b.flights.map(function(f){return f.fl;}).join('/');
+      var capN=getName(b.cap),capG=getGrade(b.cap);
+      var fls=b.flights.map(function(f){return f.fl;}).join('/');
+      b.flights.forEach(function(f){flSet.add(f.fl);});
       if(curDom){
         var intLegs=b.flights.filter(function(f){return !isDom(f.rt);});
         domList.push({cap:b.cap,fo:b.fo,extra:(b.extra||[]).join(','),
           fl:fls,rt:b.flights.map(function(f){return f.rt;}).join(' → '),
           mix:intLegs.length>0});
       }
-
+      // 사람 속성(사이트등급 갱신/LV/심사관)은 편조 대표 인원 기준 1회 표시 (레그 무관)
       [b.cap,b.fo].concat(b.extra||[]).forEach(function(raw){
+        if(!raw)return;
         var nm=getName(raw),sg=getSiteGrade(raw);
         if(CFG.gradeOverride.has(nm)&&sg===CFG.gradeOverride.get(nm)){
           sp('✅사이트 등급 갱신 확인(오버라이드 해제 가능)',fls,nm+'('+sg+')');
         }
+        if(hasLV(raw))sp('🌫️LV 저시정 제한',fls,getName(raw)+' ('+getGrade(raw)+'LV)');
       });
-
-      var hasTrainee=(capG===''||capG==='X')||(foG===''||foG==='X')||(b.extra||[]).some(function(e){var g=getGrade(e);return g===''||g==='X';});
-      if(hasTrainee){
-        [b.cap,b.fo].concat(b.extra||[]).forEach(function(rw){
-          var nm=getName(rw),g=getGrade(rw);
-          if(g===''||g==='X')return;
-          if(!CFG.spBan.has(nm))return;
-          if(CFG.spOK.has(nm))sp('ℹ️SP 예외자(세이프티 가능)',fls,nm+' - 훈련/관숙 동승, 세이프티 가능');
-          else internalV.push({h:'세이프티 불가자 + 훈련/관숙 동승 (확인 필요)',fl:fls,p:nm+' / '+pair});
-        });
-      }
-      b.flights.forEach(function(flt){
-        flSet.add(flt.fl);
-        var parts=flt.rt.split('/'),org=parts[0],dst=parts[1];
-        if(capG==='C'){
-          var ok=foEff==='A',obsAFO=null;
-          if(!ok&&(foEff==='SKIP'||foEff==='')){
-            obsAFO=b.extra.find(function(e){return getGrade(e)==='A';});
-            if(obsAFO)ok=true;
-          }
-          var ck='cc|'+pair;
-          if(!seen.cc.has(ck)){seen.cc.add(ck);ccap.push({p:pair,fl:fls,ok:ok});}
-          if(!ok){
-            var msg=(foEff==='SKIP'||foEff==='')?'C기장 관숙 편성 위반(FO A 동승 필요)':'C기장 페어링 위반';
-            violations.push({g:msg,fl:flt.fl,p:pair});
-          }
-          if(obsAFO&&ok)sp('✅C기장 관숙편성',fls,b.cap+'+'+b.fo+'+'+getName(obsAFO)+'(A)');
-          [org,dst].forEach(function(ap){
-            if(CFG.B.has(ap))violations.push({g:'B공항 C기장 위반',fl:flt.fl,p:pair,ap:ap});
-            if(!CFG.A.has(ap)&&!CFG.B.has(ap)&&!CFG.C.has(ap))violations.push({g:'C기장 분류외 공항 위반',fl:flt.fl,p:pair,ap:ap});
-          });
-        }
-        if(foEff==='C'){
-          var ok2=capG==='A',ck2='cf|'+pair;
-          if(!seen.cf.has(ck2)){seen.cf.add(ck2);cfo.push({p:pair,fl:fls,ok:ok2});}
-          if(!ok2)violations.push({g:'C부기장 페어링 위반',fl:flt.fl,p:pair});
-          [org,dst].forEach(function(ap){
-            if(!CFG.A.has(ap)&&!CFG.B.has(ap)&&!CFG.C.has(ap))violations.push({g:'C부기장 분류외 공항 위반',fl:flt.fl,p:pair,ap:ap});
-          });
-        }
-        [org,dst].forEach(function(ap){
-          if(CFG.A.has(ap)){
-            var cok=capG==='A',fok=foEff==='A'||foEff==='SKIP';
-            var k='aa|'+pair+'|'+ap;
-            if(!seen.aa.has(k)){seen.aa.add(k);aap.push({p:pair,fl:fls,ap:ap,ok:cok&&fok});}
-            if(!cok)violations.push({g:'A공항 기장 등급 위반',fl:flt.fl,p:pair,ap:ap});
-            if(!fok)violations.push({g:'A공항 부기장 등급 위반',fl:flt.fl,p:pair,ap:ap});
-          }
-          if(ap==='CXR'&&CFG.cxrBan.has(capN))internalV.push({h:'CXR 금지',fl:flt.fl,p:b.cap});
-          if(ap==='DAD'&&CFG.dadBan.has(capN))internalV.push({h:'DAD 금지',fl:flt.fl,p:b.cap});
-        });
-        if(CFG.foAonly.has(capN)){
-          if(foEff!=='A')internalV.push({h:capN+' FO제한위반',fl:flt.fl,p:b.fo});
-          else{var iok='io|'+pair;if(!seen.io.has(iok)){seen.io.add(iok);intok.push({cap:b.cap,fl:fls,fo:b.fo,rule:'FO A only'});}}
-        }
-        if(CFG.foABonly.has(capN)){
-          if(!['A','B'].includes(foEff))internalV.push({h:capN+' FO제한위반',fl:flt.fl,p:b.fo});
-          else{var iok2='io|'+pair;if(!seen.io.has(iok2)){seen.io.add(iok2);intok.push({cap:b.cap,fl:fls,fo:b.fo,rule:'FO A/B only'});}}
-        }
-      });
+      var foN0=getName(b.fo);
       if(CFG.qa.has(capN))sp('ℹ️품질심사관',fls,capN);
-      if(CFG.qa.has(foN))sp('ℹ️품질심사관',fls,foN);
+      if(CFG.qa.has(foN0))sp('ℹ️품질심사관',fls,foN0);
       if(CFG.cp.has(capN))sp('ℹ️노선심사관',fls,capN);
-      if(CFG.cp.has(foN))sp('ℹ️노선심사관',fls,foN);
-      [b.cap,b.fo].concat(b.extra||[]).forEach(function(rw){
-        if(hasLV(rw))sp('🌫️LV 저시정 제한',fls,getName(rw)+' ('+getGrade(rw)+'LV)');
+      if(CFG.cp.has(foN0))sp('ℹ️노선심사관',fls,foN0);
+
+      // ── 규정/세이프티 판정은 실제 담당 구간(레그 그룹) 단위로 정확히 처리 ──
+      var srcLegs=(b.legs&&b.legs.length)?b.legs:b.flights.map(function(f){return{fl:f.fl,rt:f.rt,fo:b.fo,extra:b.extra||[]};});
+      var groups=groupLegs(srcLegs);
+      groups.forEach(function(grp){
+        var grpFo=grp.fo||'',grpExtra=grp.extra||[];
+        var grpFoN=getName(grpFo),grpFoG=getGrade(grpFo);
+        var grpFoEff=(grpFoG===''||grpFoG==='X')?(grpFoG==='X'?'SKIP':''):grpFoG;
+        var grpFls=grp.flights.map(function(f){return f.fl;}).join('/');
+        var pair=b.cap+'/'+(grpFo||'-');
+
+        var hasTrainee=(capG===''||capG==='X')||(grpFoG===''||grpFoG==='X')||grpExtra.some(function(e){var g=getGrade(e);return g===''||g==='X';});
+        if(hasTrainee){
+          [b.cap,grpFo].concat(grpExtra).forEach(function(rw){
+            if(!rw)return;
+            var nm=getName(rw),g=getGrade(rw);
+            if(g===''||g==='X')return;
+            if(!CFG.spBan.has(nm))return;
+            if(CFG.spOK.has(nm))sp('ℹ️SP 예외자(세이프티 가능)',grpFls,nm+' - 훈련/관숙 동승, 세이프티 가능');
+            else internalV.push({h:'세이프티 불가자 + 훈련/관숙 동승 (확인 필요)',fl:grpFls,p:nm+' / '+pair});
+          });
+        }
+
+        grp.flights.forEach(function(flt){
+          var parts=flt.rt.split('/'),org=parts[0],dst=parts[1];
+          if(capG==='C'){
+            var ok=grpFoEff==='A',obsAFO=null;
+            if(!ok&&(grpFoEff==='SKIP'||grpFoEff==='')){
+              obsAFO=grpExtra.find(function(e){return getGrade(e)==='A';});
+              if(obsAFO)ok=true;
+            }
+            var ck='cc|'+pair;
+            if(!seen.cc.has(ck)){seen.cc.add(ck);ccap.push({p:pair,fl:grpFls,ok:ok});}
+            if(!ok){
+              var msg=(grpFoEff==='SKIP'||grpFoEff==='')?'C기장 관숙 편성 위반(FO A 동승 필요)':'C기장 페어링 위반';
+              violations.push({g:msg,fl:flt.fl,p:pair});
+            }
+            if(obsAFO&&ok)sp('✅C기장 관숙편성',grpFls,b.cap+'+'+grpFo+'+'+getName(obsAFO)+'(A)');
+            [org,dst].forEach(function(ap){
+              if(CFG.B.has(ap))violations.push({g:'B공항 C기장 위반',fl:flt.fl,p:pair,ap:ap});
+              if(!CFG.A.has(ap)&&!CFG.B.has(ap)&&!CFG.C.has(ap))violations.push({g:'C기장 분류외 공항 위반',fl:flt.fl,p:pair,ap:ap});
+            });
+          }
+          if(grpFoEff==='C'){
+            var ok2=capG==='A',ck2='cf|'+pair;
+            if(!seen.cf.has(ck2)){seen.cf.add(ck2);cfo.push({p:pair,fl:grpFls,ok:ok2});}
+            if(!ok2)violations.push({g:'C부기장 페어링 위반',fl:flt.fl,p:pair});
+            [org,dst].forEach(function(ap){
+              if(!CFG.A.has(ap)&&!CFG.B.has(ap)&&!CFG.C.has(ap))violations.push({g:'C부기장 분류외 공항 위반',fl:flt.fl,p:pair,ap:ap});
+            });
+          }
+          [org,dst].forEach(function(ap){
+            if(CFG.A.has(ap)){
+              var cok=capG==='A',fok=grpFoEff==='A'||grpFoEff==='SKIP';
+              var k='aa|'+pair+'|'+ap;
+              if(!seen.aa.has(k)){seen.aa.add(k);aap.push({p:pair,fl:grpFls,ap:ap,ok:cok&&fok});}
+              if(!cok)violations.push({g:'A공항 기장 등급 위반',fl:flt.fl,p:pair,ap:ap});
+              if(!fok)violations.push({g:'A공항 부기장 등급 위반',fl:flt.fl,p:pair,ap:ap});
+            }
+            if(ap==='CXR'&&CFG.cxrBan.has(capN))internalV.push({h:'CXR 금지',fl:flt.fl,p:b.cap});
+            if(ap==='DAD'&&CFG.dadBan.has(capN))internalV.push({h:'DAD 금지',fl:flt.fl,p:b.cap});
+          });
+          if(CFG.foAonly.has(capN)){
+            if(grpFoEff!=='A')internalV.push({h:capN+' FO제한위반',fl:flt.fl,p:grpFo});
+            else{var iok='io|'+pair;if(!seen.io.has(iok)){seen.io.add(iok);intok.push({cap:b.cap,fl:grpFls,fo:grpFo,rule:'FO A only'});}}
+          }
+          if(CFG.foABonly.has(capN)){
+            if(!['A','B'].includes(grpFoEff))internalV.push({h:capN+' FO제한위반',fl:flt.fl,p:grpFo});
+            else{var iok2='io|'+pair;if(!seen.io.has(iok2)){seen.io.add(iok2);intok.push({cap:b.cap,fl:grpFls,fo:grpFo,rule:'FO A/B only'});}}
+          }
+        });
+        if(grpFoG==='X')sp('DH/훈련',grpFls,grpFoN);
+        if(grpExtra.length){
+          var ng=grpExtra.filter(function(e){return getGrade(e)===''&&/^[가-힣]{2,4}$/.test(e);});
+          var g2=grpExtra.filter(function(e){return['A','B','C'].includes(getGrade(e));});
+          var gx=grpExtra.filter(function(e){return getGrade(e)==='X';});
+          if(ng.length)sp('추가탑승',grpFls,ng.join(','));
+          if(g2.length)sp('추가탑승',grpFls,g2.join(','));
+          if(gx.length)sp('DH/훈련',grpFls,gx.map(function(e){return getName(e);}).join(','));
+        }
       });
-      if(foG==='X')sp('DH/훈련',fls,foN);
-      if(b.extra&&b.extra.length){
-        var ng=b.extra.filter(function(e){return getGrade(e)===''&&/^[가-힣]{2,4}$/.test(e);});
-        var g2=b.extra.filter(function(e){return['A','B','C'].includes(getGrade(e));});
-        var gx=b.extra.filter(function(e){return getGrade(e)==='X';});
-        if(ng.length)sp('추가탑승',fls,ng.join(','));
-        if(g2.length)sp('추가탑승',fls,g2.join(','));
-        if(gx.length)sp('DH/훈련',fls,gx.map(function(e){return getName(e);}).join(','));
-      }
     });
     return{violations:violations,internalV:internalV,specials:specials,ccap:ccap,cfo:cfo,aap:aap,intok:intok,domList:domList,total:flSet.size};
   }
