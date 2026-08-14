@@ -46,8 +46,8 @@
   if(!rows.length){alert('편조 데이터를 찾을 수 없습니다.');return;}
   var raw=rows;
   var dm=location.href.match(/d=(\d{4}-\d{2}-\d{2})/);
-  var VERSION='v25';
-  var UPDATED='2026-08-13';
+  var VERSION='v26';
+  var UPDATED='2026-08-14';
   var date=dm?dm[1].replace(/-/g,'/'):'날짜미상';
   var ym=dm?dm[1].slice(0,7):'';
 
@@ -302,7 +302,10 @@
             }
             if(ap==='CXR'&&CFG.cxrBan.has(capN))internalV.push({h:'CXR 금지',fl:flt.fl,p:b.cap});
             if(ap==='DAD'&&CFG.dadBan.has(capN))internalV.push({h:'DAD 금지',fl:flt.fl,p:b.cap});
-            if(CFG.hr1000Airports.has(ap)&&!CFG.hr1000.has(capN))violations.push({g:'1000시간 미만 기장 운항 (NTG/DAT/NGB/HET 전용요건)',fl:flt.fl,p:b.cap,ap:ap});
+            if(CFG.hr1000Airports.has(ap)){
+              if(!CFG.hr1000.has(capN))violations.push({g:'1000시간 미만 기장 운항 (생지공항 전용요건)',fl:flt.fl,p:b.cap,ap:ap});
+              else sp('🛫생지공항(1000hr↑) 정상',grpFls,b.cap+' ('+ap+')');
+            }
           });
           if(CFG.foAonly.has(capN)){
             if(grpFoEff!=='A')internalV.push({h:capN+' FO제한위반',fl:flt.fl,p:grpFo});
