@@ -46,7 +46,7 @@
   if(!rows.length){alert('편조 데이터를 찾을 수 없습니다.');return;}
   var raw=rows;
   var dm=location.href.match(/d=(\d{4}-\d{2}-\d{2})/);
-  var VERSION='v24';
+  var VERSION='v25';
   var UPDATED='2026-08-13';
   var date=dm?dm[1].replace(/-/g,'/'):'날짜미상';
   var ym=dm?dm[1].slice(0,7):'';
@@ -63,7 +63,10 @@
     cp:new Set(['황종식','성기중','이재환','이태우']),
     spBan:new Set(),
     spOK:new Set(),
-    gradeOverride:new Map()
+    gradeOverride:new Map(),
+    // NTG/DAT/NGB/HET 4개 중국공항: CPT 1000시간 이상자만 운항 가능 (승무팀 제공, 매월 갱신)
+    hr1000Airports:new Set(['NTG','DAT','NGB','HET']),
+    hr1000:new Set(["안선범","박상준","한상일","김도현","윤영규","류창상","조운영","이호성","신준서","김준식","조웅진","신건수","박승훈","이상엽","김철균","김성엽","오병우","김경표","정진우","김우태","김택의","사재철","김영준","오승민","정동일","정헌호","김병준","임승건","김범주","박한성","김주성","김정희","김진욱","이유호","김치혁","여석윤","박승찬","라대영","정동수","박병구","김현모","김대우","김병선","조재신","안태건","류재환","김상겸","김유진","이홍래","박태환","김경태","이재환","이애릭","박기현","김국","신기철","문창환","유창욱","김의택","조준범","최홍장","한가람","유영수","이마이클","권상준","이태우","이병주","임채홍","박상훈","신현욱","백종혁","윤동희","이흥국","양세훈","정병국","김영채","류형년","노강철","김대연","허승혁","신윤식","송필영","김윤태","문명성","황종식","김효진","박지현","유동윤","성기중","김재훈","이민영","남준현","배대익","유영우","김병주","김찬수","주재도","손동현","박재일","이동화","이준민","이용승","이경혁","이일주","장준욱","신영근","안영환"])
   };
   // ── 월별 세이프티(FO) 불가/예외 명단 ──
   // 조회 중인 스케줄 날짜(URL의 d=YYYY-MM-DD) 기준으로 자동 선택
@@ -299,6 +302,7 @@
             }
             if(ap==='CXR'&&CFG.cxrBan.has(capN))internalV.push({h:'CXR 금지',fl:flt.fl,p:b.cap});
             if(ap==='DAD'&&CFG.dadBan.has(capN))internalV.push({h:'DAD 금지',fl:flt.fl,p:b.cap});
+            if(CFG.hr1000Airports.has(ap)&&!CFG.hr1000.has(capN))violations.push({g:'1000시간 미만 기장 운항 (NTG/DAT/NGB/HET 전용요건)',fl:flt.fl,p:b.cap,ap:ap});
           });
           if(CFG.foAonly.has(capN)){
             if(grpFoEff!=='A')internalV.push({h:capN+' FO제한위반',fl:flt.fl,p:grpFo});
