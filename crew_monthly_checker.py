@@ -1,6 +1,6 @@
 # ==========================================
 # crew_monthly_checker.py
-# 버전: v2.0 (2026-08-14) — crew_check.js v26 과 룰 동기화
+# 버전: v2.1 (2026-08-14) — 바탕화면 경로 자동탐색(OneDrive 동기화 대응) — crew_check.js v26 과 룰 동기화
 # - 파서 재작성: 부분합류 크루(기장셀 빈 행) 오인식 버그 수정
 # - 레그 단위 정밀 판정: 실제 담당 구간의 인원만 위반 판정
 # - 세이프티 명단 월별 자동 적용(SP_BY_MONTH), 조회일 기준 자동선택
@@ -447,6 +447,26 @@ def check(blocks, sp_ban, sp_ok):
 
     return violations, internalV
 
+def get_desktop_path():
+    """OneDrive로 바탕화면이 동기화된 환경(회사 PC에 흔함)에서도 실제 존재하는
+    바탕화면 폴더를 찾는다. 어디에도 없으면 스크립트가 있는 폴더에 저장(항상 성공)."""
+    candidates = []
+    onedrive = os.environ.get('OneDrive') or os.environ.get('OneDriveConsumer') or os.environ.get('OneDriveCommercial')
+    if onedrive:
+        candidates.append(os.path.join(onedrive, '바탕 화면'))
+        candidates.append(os.path.join(onedrive, 'Desktop'))
+    home = os.path.expanduser('~')
+    candidates.append(os.path.join(home, '바탕 화면'))
+    candidates.append(os.path.join(home, 'Desktop'))
+    for c in candidates:
+        if os.path.isdir(c):
+            return c
+    # 바탕화면을 못 찾으면 스크립트 실행 폴더에 저장 (실패보다 나음)
+    try:
+        return os.path.dirname(os.path.abspath(__file__))
+    except NameError:
+        return os.getcwd()
+
 def save_excel(all_results, year, month):
     wb = openpyxl.Workbook()
     ws = wb.active
@@ -532,10 +552,7 @@ def save_excel(all_results, year, month):
             if not cell.font or not cell.font.name:
                 cell.font = default_font
 
-    out_path = os.path.join(
-        os.path.expanduser('~'), 'Desktop',
-        f"편조점검_{year}{month:02d}.xlsx"
-    )
+    out_path = os.path.join(get_desktop_path(), f"편조점검_{year}{month:02d}.xlsx")
     wb.save(out_path)
     return out_path, total_v, total_i
 
@@ -568,7 +585,7 @@ def get_target_month():
 
 async def main():
     print('='*50)
-    print('✈  편조점검 월간 자동 조회 v2.0')
+    print('✈  편조점검 월간 자동 조회 v2.1')
     print('    (2026-08-14) | 문의: 승무계획팀')
     print('='*50)
 
