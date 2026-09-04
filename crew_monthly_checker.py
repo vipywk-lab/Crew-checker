@@ -1,6 +1,6 @@
 # ==========================================
 # crew_monthly_checker.py
-# 버전: v2.2 (2026-09-02) — 기간한정 등급강제(gradeOverride) 지원 — crew_check.js v26 과 룰 동기화
+# 버전: v3.0 (2026-09-04) — 규칙을 rules.json 한 곳으로 통합 (북마클릿과 공용) — crew_check.js v26 과 룰 동기화
 # - 파서 재작성: 부분합류 크루(기장셀 빈 행) 오인식 버그 수정
 # - 레그 단위 정밀 판정: 실제 담당 구간의 인원만 위반 판정
 # - 세이프티 명단 월별 자동 적용(SP_BY_MONTH), 조회일 기준 자동선택
@@ -22,57 +22,65 @@ from openpyxl.styles import Font, PatternFill, Alignment
 from tkinter import messagebox
 import tkinter as tk
 import os
+import sys
+import json
+import time
+import urllib.request
 
 CMS_URL  = "https://crew.eastarjet.com/cms/Admin/Schedule/CrewPairs/CrewPairList.php"
 HEADLESS = False
+# ==========================================
+# 편조점검 규칙 로딩
+# 규칙(공항등급/세이프티명단/1000시간명단/등급강제)은 GitHub의 rules.json
+# 한 곳에서만 관리한다. crew_check.js(북마클릿)와 이 파일이 같은 파일을 읽으므로
+# rules.json만 수정하면 양쪽에 동시 반영된다.
+# ==========================================
+RULES_URL = "https://raw.githubusercontent.com/vipywk-lab/Crew-checker/main/rules.json"
 
-# ==========================================
-# 편조점검 설정 (crew_check.js v26 과 동일)
-# ==========================================
+def load_rules():
+    """GitHub에서 규칙 파일을 읽어온다. 실패 시 프로그램을 중단한다.
+    (오래된 규칙으로 잘못 판정하는 것보다 실행하지 않는 편이 안전)"""
+    try:
+        req = urllib.request.Request(
+            RULES_URL + "?_=" + str(int(time.time())),
+            headers={"User-Agent": "Mozilla/5.0"}
+        )
+        with urllib.request.urlopen(req, timeout=15) as res:
+            return json.loads(res.read().decode("utf-8"))
+    except Exception as e:
+        msg = (f"규칙 파일(rules.json)을 불러올 수 없어 점검을 중단합니다.\n\n"
+               f"사유: {e}\n\n"
+               f"네트워크 또는 GitHub 접속 상태를 확인한 뒤 다시 실행해주세요.")
+        print("\n" + msg)
+        try:
+            root = tk.Tk(); root.withdraw()
+            messagebox.showerror("규칙 파일 로드 실패", msg)
+            root.destroy()
+        except Exception:
+            pass
+        sys.exit(1)
+
+RULES = load_rules()
+
 CFG = {
-    "A": {"YNT","DSN","DAT","CGO","NGB","TXN","CGQ","SHE","HRB","MDC","KOJ","KMJ","IZO","TKS","TAE","CXR","DYG","DLC","YNJ","HKG","BSZ","ALA","MFM"},
-    "B": {"NTG","HET","NRT","OKA","TSA","DAD","FUK","AOJ","PUS"},
-    "C": {"PVG","KIX","CTS","KUV","ICN","GMP","CJJ","BKK","CNX","TPE","PQC","CJU"},
-    "cxrBan" : {"신윤식","정진우"},
-    "dadBan" : {"장준욱"},
-    "foAonly": {"김상겸"},
-    "foABonly":{"신영근"},
-    "qa"     : {"박지현","신현욱","박승훈","신준서"},
-    "cp"     : {"황종식","성기중","이재환","이태우"},
-    # 기간 한정 등급 강제(CMS 미반영 대응). until 지나면 자동으로 CMS 등급으로 복귀.
-    "gradeOverride": {
-        "홍민영": {"grade": "C", "until": "2026-09-30"},
-        "이종길": {"grade": "C", "until": "2026-09-30"},
-        "김철":   {"grade": "C", "until": "2026-09-30"},
-    },
-    # NTG/DAT/NGB/HET 4개 중국공항(생지공항): CPT 1000시간 이상자만 운항 가능 (승무팀 제공, 매월 갱신)
-    "hr1000Airports": {"NTG","DAT","NGB","HET"},
-    "hr1000": {"안선범","박상준","한상일","김도현","윤영규","류창상","조운영","이호성","신준서","김준식",
-               "조웅진","신건수","박승훈","이상엽","김철균","김성엽","오병우","김경표","정진우","김우태",
-               "김택의","사재철","김영준","오승민","정동일","정헌호","김병준","임승건","김범주","박한성",
-               "김주성","김정희","김진욱","이유호","김치혁","여석윤","박승찬","라대영","정동수","박병구",
-               "김현모","김대우","김병선","조재신","안태건","류재환","김상겸","김유진","이홍래","박태환",
-               "김경태","이재환","이애릭","박기현","김국","신기철","문창환","유창욱","김의택","조준범",
-               "최홍장","한가람","유영수","이마이클","권상준","이태우","이병주","임채홍","박상훈","신현욱",
-               "백종혁","윤동희","이흥국","양세훈","정병국","김영채","류형년","노강철","김대연","허승혁",
-               "신윤식","송필영","김윤태","문명성","황종식","김효진","박지현","유동윤","성기중","김재훈",
-               "이민영","남준현","배대익","유영우","김병주","김찬수","주재도","손동현","박재일","이동화",
-               "이준민","이용승","이경혁","이일주","장준욱","신영근","안영환"},
+    "A": set(RULES["airports"]["A"]),
+    "B": set(RULES["airports"]["B"]),
+    "C": set(RULES["airports"]["C"]),
+    "cxrBan" : set(RULES["cxrBan"]),
+    "dadBan" : set(RULES["dadBan"]),
+    "foAonly": set(RULES["foAonly"]),
+    "foABonly": set(RULES["foABonly"]),
+    "qa"     : set(RULES["qa"]),
+    "cp"     : set(RULES["cp"]),
+    "gradeOverride": RULES.get("gradeOverride", {}),
+    "hr1000Airports": set(RULES["hr1000Airports"]),
+    "hr1000": set(RULES["hr1000"]),
 }
 
-# ── 월별 세이프티(FO) 불가/예외 명단 ──
-# 조회 대상 날짜(YYYY-MM) 기준으로 자동 선택
+# 월별 세이프티(FO) 불가/예외 명단 (rules.json 에서 로딩)
 SP_BY_MONTH = {
-    "2026-07": {"ban": {"김창중","이주화","양병모","엄태국","김우영","최은총","장재봉","이창민",
-                         "이한솔","정종성","김공주","김총화","김재영","이웅배","김민재","한다영","최도현"},
-                "ok": {"엄태국","양병모"}},
-    "2026-08": {"ban": {"김창중","이주화","김우영","최은총","장재봉","이창민","이한솔","정종성",
-                         "김공주","김총화","김재영","이웅배","김민재","최도현"},
-                "ok": set()},
-    "2026-09": {"ban": {"김창중","최은총","장재봉","이창민","이한솔","정종성","김공주","김총화",
-                         "김재영","이웅배","김민재","최도현","이재현","윤동건","한건희","박신우",
-                         "배민수","진석준"},
-                "ok": set()},
+    ym: {"ban": set(v["ban"]), "ok": set(v["ok"])}
+    for ym, v in RULES["safetyByMonth"].items()
 }
 
 def get_sp_lists(ym):
@@ -117,7 +125,7 @@ def is_junk(s):
     return bool(re.match(r'^\d{1,2}/\d{1,2}', s)) or '편조' in s or '점검' in s or len(s) == 0
 
 # 국내선 판별: 레그 하나라도 국내면 국내선으로 간주 (crew_check.js v19 이후 기준)
-KR = {"ICN", "GMP", "CJU", "CJJ", "KUV", "PUS", "TAE"}
+KR = set(RULES["koreanAirports"])
 def is_dom(rt):
     p = str(rt or '').split('/')
     return len(p) > 1 and p[0] in KR and p[1] in KR
@@ -600,7 +608,7 @@ def get_target_month():
 
 async def main():
     print('='*50)
-    print('✈  편조점검 월간 자동 조회 v2.2')
+    print('✈  편조점검 월간 자동 조회 v3.0')
     print('    (2026-08-14) | 문의: 승무계획팀')
     print('='*50)
 
