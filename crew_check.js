@@ -46,10 +46,11 @@
   if(!rows.length){alert('편조 데이터를 찾을 수 없습니다.');return;}
   var raw=rows;
   var dm=location.href.match(/d=(\d{4}-\d{2}-\d{2})/);
-  var VERSION='v26';
-  var UPDATED='2026-08-14';
+  var VERSION='v27';
+  var UPDATED='2026-09-02';
   var date=dm?dm[1].replace(/-/g,'/'):'날짜미상';
   var ym=dm?dm[1].slice(0,7):'';
+  var scheduleDate=dm?dm[1]:new Date().toISOString().slice(0,10);
 
   var CFG={
     A:new Set(['YNT','DSN','DAT','CGO','NGB','TXN','CGQ','SHE','HRB','MDC','KOJ','KMJ','IZO','TKS','TAE','CXR','DYG','DLC','YNJ','HKG','BSZ','ALA','MFM']),
@@ -63,7 +64,12 @@
     cp:new Set(['황종식','성기중','이재환','이태우']),
     spBan:new Set(),
     spOK:new Set(),
-    gradeOverride:new Map(),
+    // 기간 한정 등급 강제(CMS 미반영 대응). until 지나면 자동으로 CMS 등급으로 복귀.
+    gradeOverride:new Map([
+      ['홍민영',{grade:'C',until:'2026-09-30'}],
+      ['이종길',{grade:'C',until:'2026-09-30'}],
+      ['김철',{grade:'C',until:'2026-09-30'}]
+    ]),
     // NTG/DAT/NGB/HET 4개 중국공항: CPT 1000시간 이상자만 운항 가능 (승무팀 제공, 매월 갱신)
     hr1000Airports:new Set(['NTG','DAT','NGB','HET']),
     hr1000:new Set(["안선범","박상준","한상일","김도현","윤영규","류창상","조운영","이호성","신준서","김준식","조웅진","신건수","박승훈","이상엽","김철균","김성엽","오병우","김경표","정진우","김우태","김택의","사재철","김영준","오승민","정동일","정헌호","김병준","임승건","김범주","박한성","김주성","김정희","김진욱","이유호","김치혁","여석윤","박승찬","라대영","정동수","박병구","김현모","김대우","김병선","조재신","안태건","류재환","김상겸","김유진","이홍래","박태환","김경태","이재환","이애릭","박기현","김국","신기철","문창환","유창욱","김의택","조준범","최홍장","한가람","유영수","이마이클","권상준","이태우","이병주","임채홍","박상훈","신현욱","백종혁","윤동희","이흥국","양세훈","정병국","김영채","류형년","노강철","김대연","허승혁","신윤식","송필영","김윤태","문명성","황종식","김효진","박지현","유동윤","성기중","김재훈","이민영","남준현","배대익","유영우","김병주","김찬수","주재도","손동현","박재일","이동화","이준민","이용승","이경혁","이일주","장준욱","신영근","안영환"])
@@ -103,7 +109,10 @@
   }
   function getGrade(s){
     var n=getName(s);
-    if(CFG.gradeOverride.has(n))return CFG.gradeOverride.get(n);
+    if(CFG.gradeOverride.has(n)){
+      var ov=CFG.gradeOverride.get(n);
+      if(scheduleDate<=ov.until)return ov.grade;
+    }
     return getSiteGrade(s);
   }
   function isJunk(s){return /^\d{1,2}\/\d{1,2}/.test(s)||/편조/.test(s)||/점검/.test(s)||s.length===0;}
@@ -231,8 +240,11 @@
       [b.cap,b.fo].concat(b.extra||[]).forEach(function(raw){
         if(!raw)return;
         var nm=getName(raw),sg=getSiteGrade(raw);
-        if(CFG.gradeOverride.has(nm)&&sg===CFG.gradeOverride.get(nm)){
-          sp('✅사이트 등급 갱신 확인(오버라이드 해제 가능)',fls,nm+'('+sg+')');
+        if(CFG.gradeOverride.has(nm)){
+          var ov0=CFG.gradeOverride.get(nm);
+          if(scheduleDate<=ov0.until&&sg===ov0.grade){
+            sp('✅사이트 등급 갱신 확인(오버라이드 해제 가능)',fls,nm+'('+sg+')');
+          }
         }
         if(hasLV(raw))sp('🌫️LV 저시정 제한',fls,getName(raw)+' ('+getGrade(raw)+'LV)');
       });
