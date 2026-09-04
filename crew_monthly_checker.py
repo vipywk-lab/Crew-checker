@@ -1,6 +1,6 @@
 # ==========================================
 # crew_monthly_checker.py
-# 버전: v2.1 (2026-08-14) — 바탕화면 경로 자동탐색(OneDrive 동기화 대응) — crew_check.js v26 과 룰 동기화
+# 버전: v2.2 (2026-09-02) — 기간한정 등급강제(gradeOverride) 지원 — crew_check.js v26 과 룰 동기화
 # - 파서 재작성: 부분합류 크루(기장셀 빈 행) 오인식 버그 수정
 # - 레그 단위 정밀 판정: 실제 담당 구간의 인원만 위반 판정
 # - 세이프티 명단 월별 자동 적용(SP_BY_MONTH), 조회일 기준 자동선택
@@ -39,7 +39,12 @@ CFG = {
     "foABonly":{"신영근"},
     "qa"     : {"박지현","신현욱","박승훈","신준서"},
     "cp"     : {"황종식","성기중","이재환","이태우"},
-    "gradeOverride": {},
+    # 기간 한정 등급 강제(CMS 미반영 대응). until 지나면 자동으로 CMS 등급으로 복귀.
+    "gradeOverride": {
+        "홍민영": {"grade": "C", "until": "2026-09-30"},
+        "이종길": {"grade": "C", "until": "2026-09-30"},
+        "김철":   {"grade": "C", "until": "2026-09-30"},
+    },
     # NTG/DAT/NGB/HET 4개 중국공항(생지공항): CPT 1000시간 이상자만 운항 가능 (승무팀 제공, 매월 갱신)
     "hr1000Airports": {"NTG","DAT","NGB","HET"},
     "hr1000": {"안선범","박상준","한상일","김도현","윤영규","류창상","조운영","이호성","신준서","김준식",
@@ -91,10 +96,17 @@ def get_site_grade(s):
     m = GRADE_RE.match(s)
     return m.group(1) if m else ''
 
+# main()이 날짜를 순회하며 갱신하는 "현재 조회 중인 스케줄 날짜"(YYYY-MM-DD).
+# gradeOverride의 만료(until) 판정 기준으로 사용됨.
+_current_schedule_date = None
+
 def get_grade(s):
     n = get_name(s)
     if n in CFG["gradeOverride"]:
-        return CFG["gradeOverride"][n]
+        ov = CFG["gradeOverride"][n]
+        sd = _current_schedule_date or datetime.now().strftime('%Y-%m-%d')
+        if sd <= ov["until"]:
+            return ov["grade"]
     return get_site_grade(s)
 
 def get_lv(s):
@@ -327,10 +339,13 @@ def check(blocks, sp_ban, sp_ok):
             if not raw:
                 continue
             nm, sg = get_name(raw), get_site_grade(raw)
-            if nm in CFG['gradeOverride'] and sg == CFG['gradeOverride'][nm]:
-                internalV.append({'type': '참고', 'note': True,
-                                   'detail': '✅사이트 등급 갱신 확인(오버라이드 해제 가능)',
-                                   'fl': fls, 'pair': f"{nm}({sg})", 'dom': cur_dom})
+            if nm in CFG['gradeOverride']:
+                ov0 = CFG['gradeOverride'][nm]
+                sd0 = _current_schedule_date or datetime.now().strftime('%Y-%m-%d')
+                if sd0 <= ov0['until'] and sg == ov0['grade']:
+                    internalV.append({'type': '참고', 'note': True,
+                                       'detail': '✅사이트 등급 갱신 확인(오버라이드 해제 가능)',
+                                       'fl': fls, 'pair': f"{nm}({sg})", 'dom': cur_dom})
             lv = get_lv(raw)
             if lv:
                 internalV.append({'type': '참고', 'note': True, 'detail': '🌫️LV 저시정 제한',
@@ -585,7 +600,7 @@ def get_target_month():
 
 async def main():
     print('='*50)
-    print('✈  편조점검 월간 자동 조회 v2.1')
+    print('✈  편조점검 월간 자동 조회 v2.2')
     print('    (2026-08-14) | 문의: 승무계획팀')
     print('='*50)
 
@@ -611,8 +626,10 @@ async def main():
         all_results = []
 
         for day in range(start_day, last_day + 1):
+            global _current_schedule_date
             date_str = f"{year}/{month:02d}/{day:02d}"
             ym = f"{year}-{month:02d}"
+            _current_schedule_date = f"{year}-{month:02d}-{day:02d}"
             sp_ban, sp_ok, sp_key = get_sp_lists(ym)
             url = f"{CMS_URL}?d={year}-{month:02d}-{day:02d}&s=true&e=true&a=true"
             print(f"[{day:02d}/{last_day}] {date_str} 조회 중...", end=' ', flush=True)
