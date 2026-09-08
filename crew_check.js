@@ -1,5 +1,21 @@
 (function(){
   if(document.getElementById('_crewck')){document.getElementById('_crewck').remove();return;}
+  // 편조점검 규칙은 GitHub의 rules.json 한 곳에서만 관리 (북마클릿/월간조회 공용)
+  var RULES_URL='https://raw.githubusercontent.com/vipywk-lab/Crew-checker/main/rules.json?_='+Date.now();
+  fetch(RULES_URL).then(function(r){
+    if(!r.ok)throw new Error('HTTP '+r.status);
+    return r.json();
+  }).then(function(RULES){
+    try{ run(RULES); }
+    catch(e){ alert('편조점검 실행 중 오류가 발생했습니다.\n\n'+e.message); }
+  }).catch(function(e){
+    // 오래된 규칙으로 잘못 판정하는 것보다 실행을 멈추는 편이 안전
+    alert('규칙 파일(rules.json)을 불러올 수 없어 점검을 중단합니다.\n\n'
+      +'사유: '+e.message+'\n\n'
+      +'네트워크 또는 GitHub 접속 상태를 확인한 뒤 다시 실행해주세요.');
+  });
+
+  function run(RULES){
   var tables=document.querySelectorAll('table');
   // 편조 테이블 자동 탐색: 노선 패턴(XXX/XXX)이 가장 많은 테이블 선택.
   // CMS 구조가 바뀌어 못 찾으면 기존 방식(tables[1])으로 폴백.
@@ -46,50 +62,29 @@
   if(!rows.length){alert('편조 데이터를 찾을 수 없습니다.');return;}
   var raw=rows;
   var dm=location.href.match(/d=(\d{4}-\d{2}-\d{2})/);
-  var VERSION='v27';
-  var UPDATED='2026-09-02';
+  var VERSION='v29';
+  var UPDATED='2026-09-05';
   var date=dm?dm[1].replace(/-/g,'/'):'날짜미상';
   var ym=dm?dm[1].slice(0,7):'';
   var scheduleDate=dm?dm[1]:new Date().toISOString().slice(0,10);
 
   var CFG={
-    A:new Set(['YNT','DSN','DAT','CGO','NGB','TXN','CGQ','SHE','HRB','MDC','KOJ','KMJ','IZO','TKS','TAE','CXR','DYG','DLC','YNJ','HKG','BSZ','ALA','MFM']),
-    B:new Set(['NTG','HET','NRT','OKA','TSA','DAD','FUK','AOJ','PUS']),
-    C:new Set(['PVG','KIX','CTS','KUV','ICN','GMP','CJJ','BKK','CNX','TPE','PQC','CJU']),
-    cxrBan:new Set(['신윤식','정진우']),
-    dadBan:new Set(['장준욱']),
-    foAonly:new Set(['김상겸']),
-    foABonly:new Set(['신영근']),
-    qa:new Set(['박지현','신현욱','박승훈','신준서']),
-    cp:new Set(['황종식','성기중','이재환','이태우']),
+    A:new Set(RULES.airports.A),
+    B:new Set(RULES.airports.B),
+    C:new Set(RULES.airports.C),
+    cxrBan:new Set(RULES.cxrBan),
+    dadBan:new Set(RULES.dadBan),
+    foAonly:new Set(RULES.foAonly),
+    foABonly:new Set(RULES.foABonly),
+    qa:new Set(RULES.qa),
+    cp:new Set(RULES.cp),
     spBan:new Set(),
     spOK:new Set(),
-    // 기간 한정 등급 강제(CMS 미반영 대응). until 지나면 자동으로 CMS 등급으로 복귀.
-    gradeOverride:new Map([
-      ['홍민영',{grade:'C',until:'2026-09-30'}],
-      ['이종길',{grade:'C',until:'2026-09-30'}],
-      ['김철',{grade:'C',until:'2026-09-30'}]
-    ]),
-    // NTG/DAT/NGB/HET 4개 중국공항: CPT 1000시간 이상자만 운항 가능 (승무팀 제공, 매월 갱신)
-    hr1000Airports:new Set(['NTG','DAT','NGB','HET']),
-    hr1000:new Set(["안선범","박상준","한상일","김도현","윤영규","류창상","조운영","이호성","신준서","김준식","조웅진","신건수","박승훈","이상엽","김철균","김성엽","오병우","김경표","정진우","김우태","김택의","사재철","김영준","오승민","정동일","정헌호","김병준","임승건","김범주","박한성","김주성","김정희","김진욱","이유호","김치혁","여석윤","박승찬","라대영","정동수","박병구","김현모","김대우","김병선","조재신","안태건","류재환","김상겸","김유진","이홍래","박태환","김경태","이재환","이애릭","박기현","김국","신기철","문창환","유창욱","김의택","조준범","최홍장","한가람","유영수","이마이클","권상준","이태우","이병주","임채홍","박상훈","신현욱","백종혁","윤동희","이흥국","양세훈","정병국","김영채","류형년","노강철","김대연","허승혁","신윤식","송필영","김윤태","문명성","황종식","김효진","박지현","유동윤","성기중","김재훈","이민영","남준현","배대익","유영우","김병주","김찬수","주재도","손동현","박재일","이동화","이준민","이용승","이경혁","이일주","장준욱","신영근","안영환"])
+    gradeOverride:new Map(Object.keys(RULES.gradeOverride||{}).map(function(k){return [k,RULES.gradeOverride[k]];})),
+    hr1000Airports:new Set(RULES.hr1000Airports),
+    hr1000:new Set(RULES.hr1000)
   };
-  // ── 월별 세이프티(FO) 불가/예외 명단 ──
-  // 조회 중인 스케줄 날짜(URL의 d=YYYY-MM-DD) 기준으로 자동 선택
-  var SP_BY_MONTH={
-    '2026-07':{
-      ban:['김창중','이주화','양병모','엄태국','김우영','최은총','장재봉','이창민','이한솔','정종성','김공주','김총화','김재영','이웅배','김민재','한다영','최도현'],
-      ok:['엄태국','양병모']
-    },
-    '2026-08':{
-      ban:['김창중','이주화','김우영','최은총','장재봉','이창민','이한솔','정종성','김공주','김총화','김재영','이웅배','김민재','최도현'],
-      ok:[]
-    },
-    '2026-09':{
-      ban:['김창중','최은총','장재봉','이창민','이한솔','정종성','김공주','김총화','김재영','이웅배','김민재','최도현','이재현','윤동건','한건희','박신우','배민수','진석준'],
-      ok:[]
-    }
-  };
+  var SP_BY_MONTH=RULES.safetyByMonth;
   var _mk=Object.keys(SP_BY_MONTH).sort();
   var spKey = !ym ? _mk[_mk.length-1]
             : (SP_BY_MONTH[ym] ? ym
@@ -98,7 +93,7 @@
   CFG.spBan=new Set(spSel.ban);
   CFG.spOK=new Set(spSel.ok);
   var spMonthLabel=spKey.replace('-','.')+' 기준';
-  var KR=new Set(['ICN','GMP','CJU','CJJ','KUV','PUS','TAE']);
+  var KR=new Set(RULES.koreanAirports);
   function isDom(rt){var p=String(rt||'').split('/');return KR.has(p[0])&&KR.has(p[1]);}
 
   function getName(s){return s.replace(/[ABCX](LV)?.*$/,'');}
@@ -355,6 +350,45 @@
     return h+'</div>';
   }
 
+  function downloadDomExcel(L, dateLabel){
+    var nMix=L.filter(function(x){return x.mix;}).length;
+    var rowsHtml=L.map(function(x){
+      var extra=x.extra?('+'+x.extra):'';
+      var mixTag=x.mix?'<span style="color:#b8860b;font-weight:bold"> [국제혼합]</span>':'';
+      var bg=x.mix?'#fff8e1':'#ffffff';
+      return '<tr style="background:'+bg+'">'
+        +'<td style="border:1px solid #ccc;padding:6px 10px">'+esc(x.cap)+'</td>'
+        +'<td style="border:1px solid #ccc;padding:6px 10px">'+esc(x.fo)+'</td>'
+        +'<td style="border:1px solid #ccc;padding:6px 10px;color:#666">'+esc(extra)+'</td>'
+        +'<td style="border:1px solid #ccc;padding:6px 10px;text-align:center">'+esc(x.fl)+mixTag+'</td>'
+        +'<td style="border:1px solid #ccc;padding:6px 10px">'+esc(x.rt)+'</td>'
+        +'</tr>';
+    }).join('');
+    var html=''
+      +'<html><head><meta charset="UTF-8"></head><body>'
+      +'<table style="border-collapse:collapse;font-family:맑은 고딕,sans-serif;font-size:13px">'
+      +'<tr><td colspan="5" style="font-size:16px;font-weight:bold;padding:8px 4px;color:#E4002B">✈ 국내선 편조 - '+esc(dateLabel)+'</td></tr>'
+      +'<tr><td colspan="5" style="padding:2px 4px 10px;color:#555">총 '+L.length+'건 (순수국내 '+(L.length-nMix)+' / 국제혼합 '+nMix+')</td></tr>'
+      +'<tr style="background:#1F3864;color:#fff;font-weight:bold">'
+      +'<td style="border:1px solid #ccc;padding:6px 10px">기장</td>'
+      +'<td style="border:1px solid #ccc;padding:6px 10px">부기장</td>'
+      +'<td style="border:1px solid #ccc;padding:6px 10px">기타</td>'
+      +'<td style="border:1px solid #ccc;padding:6px 10px">편명</td>'
+      +'<td style="border:1px solid #ccc;padding:6px 10px">노선</td>'
+      +'</tr>'
+      +rowsHtml
+      +'</table></body></html>';
+    var blob=new Blob(['\ufeff'+html],{type:'application/vnd.ms-excel;charset=utf-8'});
+    var url=URL.createObjectURL(blob);
+    var a=document.createElement('a');
+    a.href=url;
+    a.download='국내선편조_'+dateLabel.replace(/\//g,'-')+'.xls';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(function(){URL.revokeObjectURL(url);},1000);
+  }
+
   function renderDom(r){
     var L=r.domList,h=tabBar('dom');
     var nMix=L.filter(function(x){return x.mix;}).length;
@@ -364,6 +398,7 @@
     h+='<div><b>'+nMix+'</b><small>국제 혼합</small></div>';
     h+='</div>';
     if(!L.length){h+='<div class="none">국내선 편조 없음</div>';return h;}
+    h+='<button id="_domXlsBtn" style="width:100%;margin-bottom:10px;padding:8px;border-radius:6px;border:1px solid #2d7a45;background:#1e5631;color:#fff;font-weight:700;font-size:12px;cursor:pointer">⬇ 엑셀로 다운로드</button>';
     h+='<div class="sec info"><h4>🇰🇷 국내선 운항 편조 '+L.length+'건</h4><table><tbody>';
     h+='<tr style="color:#888;font-size:10px"><td>기장 / 부기장</td><td>편명</td><td>노선</td></tr>';
     L.forEach(function(x){
@@ -432,7 +467,14 @@
         panel.scrollTop=sc;
       });
     });
+    var xlsBtn=panel.querySelector('#_domXlsBtn');
+    if(xlsBtn){
+      xlsBtn.addEventListener('click',function(){
+        downloadDomExcel(result.domList, date);
+      });
+    }
   }
   draw();
   document.body.appendChild(panel);
+  }
 })();
