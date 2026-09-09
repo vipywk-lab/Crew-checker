@@ -1,6 +1,6 @@
 # ==========================================
 # crew_monthly_checker.py
-# 버전: v3.0 (2026-09-04) — 규칙을 rules.json 한 곳으로 통합 (북마클릿과 공용) — crew_check.js v26 과 룰 동기화
+# 버전: v3.1 (2026-09-05) — 관심공항(제주 등) 국내선탭 포함 기능 추가 — crew_check.js v26 과 룰 동기화
 # - 파서 재작성: 부분합류 크루(기장셀 빈 행) 오인식 버그 수정
 # - 레그 단위 정밀 판정: 실제 담당 구간의 인원만 위반 판정
 # - 세이프티 명단 월별 자동 적용(SP_BY_MONTH), 조회일 기준 자동선택
@@ -126,9 +126,19 @@ def is_junk(s):
 
 # 국내선 판별: 레그 하나라도 국내면 국내선으로 간주 (crew_check.js v19 이후 기준)
 KR = set(RULES["koreanAirports"])
+WATCH = set(RULES.get("watchAirports", []))
 def is_dom(rt):
     p = str(rt or '').split('/')
     return len(p) > 1 and p[0] in KR and p[1] in KR
+
+def hits_watch(rt):
+    p = str(rt or '').split('/')
+    return len(p) > 1 and (p[0] in WATCH or p[1] in WATCH)
+
+def is_dom_tab(rt):
+    """국내선 탭 포함 여부. 순수 국내이거나, 관심공항(제주 등)을 오가면
+    국제선이어도 포함한다 (기상 악화 시 해당 공항 관련 전 편 확인용)."""
+    return is_dom(rt) or hits_watch(rt)
 
 def pick_table(tables):
     """편조 테이블 자동 탐색: 노선 패턴(XXX/XXX)이 가장 많은 테이블 선택.
@@ -328,7 +338,7 @@ def check(blocks, sp_ban, sp_ok):
         if b.get('isSolo'):
             fl_set.update(f['fl'] for f in b['flights'])
             fls0 = '/'.join(f['fl'] for f in b['flights'])
-            dom0 = bool(b['flights']) and any(is_dom(f['rt']) for f in b['flights'])
+            dom0 = bool(b['flights']) and any(is_dom_tab(f['rt']) for f in b['flights'])
             for n in b.get('names', []):
                 g = get_grade(n)
                 label = 'DH/훈련' if g == 'X' else '추가 탑승'
@@ -340,7 +350,7 @@ def check(blocks, sp_ban, sp_ok):
         fo_disp = get_name(b['fo']) if b['fo'] else ''
         fls = '/'.join(f['fl'] for f in b['flights'])
         fl_set.update(f['fl'] for f in b['flights'])
-        cur_dom = bool(b['flights']) and any(is_dom(f['rt']) for f in b['flights'])
+        cur_dom = bool(b['flights']) and any(is_dom_tab(f['rt']) for f in b['flights'])
 
         # 사람 속성(사이트등급 갱신/LV/심사관)은 편조 대표 인원 기준 1회만 표시
         for raw in [b['cap'], b['fo']] + list(b.get('extra', [])):
@@ -378,7 +388,7 @@ def check(blocks, sp_ban, sp_ok):
             grp_fo_eff = 'SKIP' if grp_fo_g == 'X' else (grp_fo_g if grp_fo_g else '')
             grp_fls = '/'.join(f['fl'] for f in grp['flights'])
             pair = f"{b['cap']}/{grp_fo or '-'}"
-            grp_dom = any(is_dom(f['rt']) for f in grp['flights'])
+            grp_dom = any(is_dom_tab(f['rt']) for f in grp['flights'])
 
             # 세이프티
             has_trainee = (cap_g in ('', 'X')) or (grp_fo_g in ('', 'X')) or any(get_grade(e) in ('', 'X') for e in grp_extra)
@@ -608,7 +618,7 @@ def get_target_month():
 
 async def main():
     print('='*50)
-    print('✈  편조점검 월간 자동 조회 v3.0')
+    print('✈  편조점검 월간 자동 조회 v3.1')
     print('    (2026-08-14) | 문의: 승무계획팀')
     print('='*50)
 

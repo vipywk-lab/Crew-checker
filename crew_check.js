@@ -62,7 +62,7 @@
   if(!rows.length){alert('편조 데이터를 찾을 수 없습니다.');return;}
   var raw=rows;
   var dm=location.href.match(/d=(\d{4}-\d{2}-\d{2})/);
-  var VERSION='v29';
+  var VERSION='v30';
   var UPDATED='2026-09-05';
   var date=dm?dm[1].replace(/-/g,'/'):'날짜미상';
   var ym=dm?dm[1].slice(0,7):'';
@@ -95,6 +95,8 @@
   var spMonthLabel=spKey.replace('-','.')+' 기준';
   var KR=new Set(RULES.koreanAirports);
   function isDom(rt){var p=String(rt||'').split('/');return KR.has(p[0])&&KR.has(p[1]);}
+  var WATCH=new Set(RULES.watchAirports||[]);
+  function hitsWatch(rt){var p=String(rt||'').split('/');return WATCH.has(p[0])||WATCH.has(p[1]);}
 
   function getName(s){return s.replace(/[ABCX](LV)?.*$/,'');}
   function hasLV(s){return /^[가-힣]{2,5}[ABCX]LV/.test(s);}
@@ -212,7 +214,7 @@
     var curDom=false;
     function sp(g,fl,c){var k=g+'|'+fl+'|'+c;if(!seen.sp.has(k)){seen.sp.add(k);specials.push({g:g,fl:fl,c:c,d:curDom});}}
     blocks.forEach(function(b){
-      curDom=b.flights.length>0&&b.flights.some(function(f){return isDom(f.rt);});
+      curDom=b.flights.length>0&&b.flights.some(function(f){return isDom(f.rt)||hitsWatch(f.rt);});
       if(b.isSolo){
         var fls0=b.flights.map(function(f){return f.fl;}).join('/');
         b.flights.forEach(function(f){flSet.add(f.fl);});

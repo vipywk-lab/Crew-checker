@@ -5,7 +5,8 @@
     "공항등급": "airports.A/B/C 에 공항코드(3글자) 추가·삭제",
     "세이프티명단": "safetyByMonth 에 'YYYY-MM': {ban:[불가자], ok:[예외자]} 형태로 새 달 추가",
     "1000시간명단": "hr1000 배열을 승무팀 제공 명단으로 통째로 교체 (매월 갱신)",
-    "등급강제": "gradeOverride 에 {\"이름\": {\"grade\":\"C\", \"until\":\"YYYY-MM-DD\"}} 추가. until 날짜가 지나면 자동 해제됨"
+    "등급강제": "gradeOverride 에 {\"이름\": {\"grade\":\"C\", \"until\":\"YYYY-MM-DD\"}} 추가. until 날짜가 지나면 자동 해제됨",
+    "관심공항": "watchAirports 에 공항코드 추가하면, 그 공항 오가는 편은 국제선이어도 국내선 탭에 자동 포함 (기상 악화 대응용)"
   },
   "airports": {
     "A": [
@@ -318,5 +319,8 @@
     "장준욱",
     "신영근",
     "안영환"
+  ],
+  "watchAirports": [
+    "CJU"
   ]
 }
