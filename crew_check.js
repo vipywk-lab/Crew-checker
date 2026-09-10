@@ -62,7 +62,7 @@
   if(!rows.length){alert('편조 데이터를 찾을 수 없습니다.');return;}
   var raw=rows;
   var dm=location.href.match(/d=(\d{4}-\d{2}-\d{2})/);
-  var VERSION='v30';
+  var VERSION='v31';
   var UPDATED='2026-09-05';
   var date=dm?dm[1].replace(/-/g,'/'):'날짜미상';
   var ym=dm?dm[1].slice(0,7):'';
@@ -355,13 +355,16 @@
   function downloadDomExcel(L, dateLabel){
     var nMix=L.filter(function(x){return x.mix;}).length;
     var rowsHtml=L.map(function(x){
+      var lvNote=(hasLV(x.cap)||hasLV(x.fo))?'저경력 기장':'';
       var extra=x.extra?('+'+x.extra):'';
+      if(lvNote)extra=(extra?extra+' / ':'')+lvNote;
       var mixTag=x.mix?'<span style="color:#b8860b;font-weight:bold"> [국제혼합]</span>':'';
       var bg=x.mix?'#fff8e1':'#ffffff';
+      var extraStyle='border:1px solid #ccc;padding:6px 10px;color:#666'+(lvNote?';font-weight:bold;color:#b8860b':'');
       return '<tr style="background:'+bg+'">'
         +'<td style="border:1px solid #ccc;padding:6px 10px">'+esc(x.cap)+'</td>'
         +'<td style="border:1px solid #ccc;padding:6px 10px">'+esc(x.fo)+'</td>'
-        +'<td style="border:1px solid #ccc;padding:6px 10px;color:#666">'+esc(extra)+'</td>'
+        +'<td style="'+extraStyle+'">'+esc(extra)+'</td>'
         +'<td style="border:1px solid #ccc;padding:6px 10px;text-align:center">'+esc(x.fl)+mixTag+'</td>'
         +'<td style="border:1px solid #ccc;padding:6px 10px">'+esc(x.rt)+'</td>'
         +'</tr>';
