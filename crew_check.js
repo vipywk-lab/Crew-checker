@@ -62,7 +62,7 @@
   if(!rows.length){alert('편조 데이터를 찾을 수 없습니다.');return;}
   var raw=rows;
   var dm=location.href.match(/d=(\d{4}-\d{2}-\d{2})/);
-  var VERSION='v33';
+  var VERSION='v34';
   var UPDATED='2026-09-05';
   var date=dm?dm[1].replace(/-/g,'/'):'날짜미상';
   var ym=dm?dm[1].slice(0,7):'';
@@ -209,7 +209,7 @@
   }
 
   function check(blocks){
-    var violations=[],internalV=[],specials=[],ccap=[],cfo=[],aap=[],intok=[],domList=[];
+    var violations=[],internalV=[],specials=[],ccap=[],cfo=[],aap=[],intok=[],domList=[],capTrainee=[];
     var seen={cc:new Set(),cf:new Set(),aa:new Set(),sp:new Set(),io:new Set()};
     var flSet=new Set();
     var ferrySet=new Set();
@@ -264,7 +264,7 @@
         if(isCaptTrainee)grpFoEff='SKIP';
         var grpFls=grp.flights.map(function(f){return f.fl;}).join('/');
         var pair=b.cap+'/'+(grpFo||'-');
-        if(isCaptTrainee)sp('✈️기장훈련생(등급체크 제외)',grpFls,grpFoN+'('+grpFoG+')');
+        if(isCaptTrainee)capTrainee.push({cap:b.cap,fo:grpFo,fl:grpFls,grade:grpFoG,d:curDom});
 
         var hasTrainee=(capG===''||capG==='X')||(grpFoG===''||grpFoG==='X')||grpExtra.some(function(e){var g=getGrade(e);return g===''||g==='X';});
         if(hasTrainee){
@@ -341,7 +341,7 @@
         }
       });
     });
-    return{violations:violations,internalV:internalV,specials:specials,ccap:ccap,cfo:cfo,aap:aap,intok:intok,domList:domList,total:flSet.size,ferry:ferrySet.size};
+    return{violations:violations,internalV:internalV,specials:specials,ccap:ccap,cfo:cfo,aap:aap,intok:intok,domList:domList,total:flSet.size,ferry:ferrySet.size,capTrainee:capTrainee};
   }
 
   function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
@@ -444,6 +444,11 @@
       r.intok.forEach(function(x){h+=row([esc(x.cap)+' ('+esc(x.rule)+')',esc(x.fl),esc(x.fo)]);});
       h+='</tbody></table></div>';
     }
+    if(r.capTrainee.length){
+      h+='<div class="sec ok"><h4>✈️ 기장훈련생 페어링 (등급체크 제외) '+r.capTrainee.length+'건</h4><table><tbody>';
+      r.capTrainee.forEach(function(x){h+=row([esc(x.cap)+' / '+esc(x.fo)+'('+esc(x.grade)+')',esc(x.fl)]);});
+      h+='</tbody></table></div>';
+    }
     if(r.ccap.length||r.cfo.length||r.aap.length){
       h+='<div class="sec info"><h4>📋 등급별 편조</h4>';
       if(r.ccap.length){h+='<div class="lbl">C기장</div><table><tbody>';r.ccap.forEach(function(x){h+=row([esc(x.p),esc(x.fl),x.ok?'<span class="ok">✓정상</span>':'<span class="bad">✗위반</span>']);});h+='</tbody></table>';}
@@ -452,9 +457,18 @@
       h+='</div>';
     }
     if(r.specials.length){
-      h+='<div class="sec ok"><h4>ℹ️ 특이사항</h4><table><tbody>';
-      r.specials.forEach(function(x){h+=row([esc(x.g),esc(x.fl),esc(x.c)]);});
-      h+='</tbody></table></div>';
+      h+='<div class="sec ok"><h4>ℹ️ 특이사항 '+r.specials.length+'건</h4>';
+      var sgGroups={},sgOrder=[];
+      r.specials.forEach(function(x){
+        if(!sgGroups[x.g]){sgGroups[x.g]=[];sgOrder.push(x.g);}
+        sgGroups[x.g].push(x);
+      });
+      sgOrder.forEach(function(g){
+        h+='<div class="lbl">'+esc(g)+' ('+sgGroups[g].length+')</div><table><tbody>';
+        sgGroups[g].forEach(function(x){h+=row([esc(x.fl),esc(x.c)]);});
+        h+='</tbody></table>';
+      });
+      h+='</div>';
     }
     if(!vc&&!ic&&!r.specials.length)h+='<div class="none">✅ 이상 없음</div>';
     return h;
