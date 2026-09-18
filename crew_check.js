@@ -62,7 +62,7 @@
   if(!rows.length){alert('편조 데이터를 찾을 수 없습니다.');return;}
   var raw=rows;
   var dm=location.href.match(/d=(\d{4}-\d{2}-\d{2})/);
-  var VERSION='v31';
+  var VERSION='v33';
   var UPDATED='2026-09-05';
   var date=dm?dm[1].replace(/-/g,'/'):'날짜미상';
   var ym=dm?dm[1].slice(0,7):'';
@@ -82,7 +82,8 @@
     spOK:new Set(),
     gradeOverride:new Map(Object.keys(RULES.gradeOverride||{}).map(function(k){return [k,RULES.gradeOverride[k]];})),
     hr1000Airports:new Set(RULES.hr1000Airports),
-    hr1000:new Set(RULES.hr1000)
+    hr1000:new Set(RULES.hr1000),
+    captainTrainee:new Set(RULES.captainTrainee||[])
   };
   var SP_BY_MONTH=RULES.safetyByMonth;
   var _mk=Object.keys(SP_BY_MONTH).sort();
@@ -127,7 +128,7 @@
     // 각 행(line)을 하나의 block으로 파싱 (line=block 1:1), hasCap 보존
     var blocks=[];
     clean.forEach(function(o){
-      var allRe=/(\d{2}:\d{2})|([A-Z]{3,4}\/[A-Z]{3,4})|(\d{3,4})(?![\d:])|([가-힣]{2,5}([ABCX](LV)?)?)/g,m,typed=[];
+      var allRe=/(\d{2}:\d{2})|([A-Z]{3,4}\/[A-Z]{3,4})|(\d{3,4}F?)(?![\d:])|([가-힣]{2,5}([ABCX](LV)?)?)/g,m,typed=[];
       while((m=allRe.exec(o.line))!==null){
         if(m[1])typed.push({t:'time',v:m[1]});
         else if(m[2])typed.push({t:'route',v:m[2]});
@@ -211,13 +212,14 @@
     var violations=[],internalV=[],specials=[],ccap=[],cfo=[],aap=[],intok=[],domList=[];
     var seen={cc:new Set(),cf:new Set(),aa:new Set(),sp:new Set(),io:new Set()};
     var flSet=new Set();
+    var ferrySet=new Set();
     var curDom=false;
     function sp(g,fl,c){var k=g+'|'+fl+'|'+c;if(!seen.sp.has(k)){seen.sp.add(k);specials.push({g:g,fl:fl,c:c,d:curDom});}}
     blocks.forEach(function(b){
       curDom=b.flights.length>0&&b.flights.some(function(f){return isDom(f.rt)||hitsWatch(f.rt);});
       if(b.isSolo){
         var fls0=b.flights.map(function(f){return f.fl;}).join('/');
-        b.flights.forEach(function(f){flSet.add(f.fl);});
+        b.flights.forEach(function(f){flSet.add(f.fl);if(/F$/.test(f.fl))ferrySet.add(f.fl);});
         b.names.forEach(function(n){
           var g=getGrade(n),label=g==='X'?'DH/훈련':'추가 탑승';
           sp(label,fls0,getName(n));
@@ -226,7 +228,7 @@
       }
       var capN=getName(b.cap),capG=getGrade(b.cap);
       var fls=b.flights.map(function(f){return f.fl;}).join('/');
-      b.flights.forEach(function(f){flSet.add(f.fl);});
+      b.flights.forEach(function(f){flSet.add(f.fl);if(/F$/.test(f.fl))ferrySet.add(f.fl);});
       if(curDom){
         var intLegs=b.flights.filter(function(f){return !isDom(f.rt);});
         domList.push({cap:b.cap,fo:b.fo,extra:(b.extra||[]).join(','),
@@ -257,9 +259,12 @@
       groups.forEach(function(grp){
         var grpFo=grp.fo||'',grpExtra=grp.extra||[];
         var grpFoN=getName(grpFo),grpFoG=getGrade(grpFo);
+        var isCaptTrainee=grpFo&&CFG.captainTrainee.has(grpFoN);
         var grpFoEff=(grpFoG===''||grpFoG==='X')?(grpFoG==='X'?'SKIP':''):grpFoG;
+        if(isCaptTrainee)grpFoEff='SKIP';
         var grpFls=grp.flights.map(function(f){return f.fl;}).join('/');
         var pair=b.cap+'/'+(grpFo||'-');
+        if(isCaptTrainee)sp('✈️기장훈련생(등급체크 제외)',grpFls,grpFoN+'('+grpFoG+')');
 
         var hasTrainee=(capG===''||capG==='X')||(grpFoG===''||grpFoG==='X')||grpExtra.some(function(e){var g=getGrade(e);return g===''||g==='X';});
         if(hasTrainee){
@@ -336,7 +341,7 @@
         }
       });
     });
-    return{violations:violations,internalV:internalV,specials:specials,ccap:ccap,cfo:cfo,aap:aap,intok:intok,domList:domList,total:flSet.size};
+    return{violations:violations,internalV:internalV,specials:specials,ccap:ccap,cfo:cfo,aap:aap,intok:intok,domList:domList,total:flSet.size,ferry:ferrySet.size};
   }
 
   function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
@@ -419,7 +424,7 @@
     if(mode==='dom')return renderDom(r);
     var vc=r.violations.length,ic=r.internalV.length,h=tabBar('all');
     h+='<div class="st">';
-    h+='<div><b>'+r.total+'</b><small>총편수</small></div>';
+    h+='<div><b>'+r.total+'</b><small>총편수'+(r.ferry?' (F '+r.ferry+')':'')+'</small></div>';
     h+='<div class="'+(vc?'bad':'')+'"><b class="'+(vc?'':'bl')+'">'+vc+'</b><small>규정위반</small></div>';
     h+='<div class="'+(ic?'warn':'')+'"><b class="'+(ic?'':'bl')+'">'+ic+'</b><small>내부위반</small></div>';
     h+='<div><b>'+r.specials.length+'</b><small>특이사항</small></div>';

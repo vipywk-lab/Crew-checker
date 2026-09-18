@@ -1,6 +1,6 @@
 # ==========================================
 # crew_monthly_checker.py
-# 버전: v3.1 (2026-09-05) — 관심공항(제주 등) 국내선탭 포함 기능 추가 — crew_check.js v26 과 룰 동기화
+# 버전: v3.5 (2026-09-08) — 기장훈련생(FO등급 무관 예외) 처리 추가 — crew_check.js v26 과 룰 동기화
 # - 파서 재작성: 부분합류 크루(기장셀 빈 행) 오인식 버그 수정
 # - 레그 단위 정밀 판정: 실제 담당 구간의 인원만 위반 판정
 # - 세이프티 명단 월별 자동 적용(SP_BY_MONTH), 조회일 기준 자동선택
@@ -75,6 +75,7 @@ CFG = {
     "gradeOverride": RULES.get("gradeOverride", {}),
     "hr1000Airports": set(RULES["hr1000Airports"]),
     "hr1000": set(RULES["hr1000"]),
+    "captainTrainee": set(RULES.get("captainTrainee", [])),
 }
 
 # 월별 세이프티(FO) 불가/예외 명단 (rules.json 에서 로딩)
@@ -200,7 +201,7 @@ def parse_table(html):
 TOKEN_RE = re.compile(
     r'(\d{2}:\d{2})'
     r'|([A-Z]{3,4}/[A-Z]{3,4})'
-    r'|(\d{3,4})(?![\d:])'
+    r'|(\d{3,4}F?)(?![\d:])'
     r'|([가-힣]{2,5}(?:[ABCX](?:LV)?)?)'
 )
 
@@ -333,10 +334,12 @@ def check(blocks, sp_ban, sp_ok):
     violations, internalV = [], []
     seen = {'cc': set(), 'cf': set(), 'aa': set()}
     fl_set = set()
+    ferry_set = set()
 
     for b in blocks:
         if b.get('isSolo'):
             fl_set.update(f['fl'] for f in b['flights'])
+            ferry_set.update(f['fl'] for f in b['flights'] if f['fl'].endswith('F'))
             fls0 = '/'.join(f['fl'] for f in b['flights'])
             dom0 = bool(b['flights']) and any(is_dom_tab(f['rt']) for f in b['flights'])
             for n in b.get('names', []):
@@ -350,6 +353,7 @@ def check(blocks, sp_ban, sp_ok):
         fo_disp = get_name(b['fo']) if b['fo'] else ''
         fls = '/'.join(f['fl'] for f in b['flights'])
         fl_set.update(f['fl'] for f in b['flights'])
+        ferry_set.update(f['fl'] for f in b['flights'] if f['fl'].endswith('F'))
         cur_dom = bool(b['flights']) and any(is_dom_tab(f['rt']) for f in b['flights'])
 
         # 사람 속성(사이트등급 갱신/LV/심사관)은 편조 대표 인원 기준 1회만 표시
@@ -385,10 +389,16 @@ def check(blocks, sp_ban, sp_ok):
             grp_fo = grp['fo'] or ''
             grp_extra = grp['extra'] or []
             grp_fo_n, grp_fo_g = get_name(grp_fo), get_grade(grp_fo)
+            is_capt_trainee = bool(grp_fo) and grp_fo_n in CFG['captainTrainee']
             grp_fo_eff = 'SKIP' if grp_fo_g == 'X' else (grp_fo_g if grp_fo_g else '')
+            if is_capt_trainee:
+                grp_fo_eff = 'SKIP'
             grp_fls = '/'.join(f['fl'] for f in grp['flights'])
             pair = f"{b['cap']}/{grp_fo or '-'}"
             grp_dom = any(is_dom_tab(f['rt']) for f in grp['flights'])
+            if is_capt_trainee:
+                internalV.append({'type':'참고','note':True,'detail':'✈️기장훈련생(등급체크 제외)',
+                                   'fl':grp_fls,'pair':f"{grp_fo_n}({grp_fo_g})",'dom':grp_dom})
 
             # 세이프티
             has_trainee = (cap_g in ('', 'X')) or (grp_fo_g in ('', 'X')) or any(get_grade(e) in ('', 'X') for e in grp_extra)
@@ -478,7 +488,7 @@ def check(blocks, sp_ban, sp_ok):
                     internalV.append({'type':'참고','note':True,'detail':'DH/훈련','fl':grp_fls,
                                        'pair':','.join(get_name(e) for e in gx),'dom':grp_dom})
 
-    return violations, internalV
+    return violations, internalV, len(fl_set), len(ferry_set)
 
 def get_desktop_path():
     """OneDrive로 바탕화면이 동기화된 환경(회사 PC에 흔함)에서도 실제 존재하는
@@ -500,7 +510,44 @@ def get_desktop_path():
     except NameError:
         return os.getcwd()
 
-def save_excel(all_results, year, month):
+def record_and_compare(year, month, total_flights, total_ferry):
+    """이번 조회 결과를 이력 파일에 기록하고, 같은 달의 직전 조회와 비교한다.
+    기안 등에 '예정 대비 실제 변동(비운항/다이버트 페리 등)'을 참고자료로 쓰기 위함.
+    이력 파일 저장/읽기가 실패해도 조회 자체에는 영향 주지 않는다."""
+    hist_path = os.path.join(get_desktop_path(), '편조점검_이력.json')
+    key = f"{year}-{month:02d}"
+    history = {}
+    try:
+        if os.path.isfile(hist_path):
+            history = json.load(open(hist_path, encoding='utf-8'))
+    except Exception:
+        history = {}
+
+    prev_list = history.get(key, [])
+    diff_msg = None
+    if prev_list:
+        prev = prev_list[-1]
+        d_fl = total_flights - prev.get('total_flights', total_flights)
+        d_fr = total_ferry - prev.get('total_ferry', total_ferry)
+        sgn = lambda n: f"+{n}" if n >= 0 else str(n)
+        diff_msg = (f"지난 조회({prev.get('timestamp','?')}) 대비 "
+                    f"총편수 {sgn(d_fl)}편, 페리 {sgn(d_fr)}편")
+    else:
+        diff_msg = "이번 달 첫 조회 기록 (다음 조회부터 직전 대비 증감이 표시됩니다)"
+
+    prev_list.append({
+        'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M'),
+        'total_flights': total_flights,
+        'total_ferry': total_ferry,
+    })
+    history[key] = prev_list[-12:]  # 달마다 최근 12회까지만 보관
+    try:
+        json.dump(history, open(hist_path, 'w', encoding='utf-8'), ensure_ascii=False, indent=2)
+    except Exception:
+        pass  # 저장 실패해도(파일 잠김 등) 조회 결과 자체는 정상 반환
+    return diff_msg
+
+def save_excel(all_results, year, month, total_flights=0, total_ferry=0):
     wb = openpyxl.Workbook()
     ws = wb.active
     ws.title = f"{year}년{month:02d}월_위반사항"
@@ -567,20 +614,25 @@ def save_excel(all_results, year, month):
     ws2 = wb.create_sheet('요약')
     ws2['A1'] = f"{year}년 {month:02d}월 편조점검 결과"
     ws2['A1'].font = Font(name='맑은 고딕', bold=True, size=13)
-    ws2['A3'] = '조회 일수'
-    ws2['B3'] = len(all_results)
-    ws2['A4'] = '규정위반 건수'
-    ws2['B4'] = total_v
-    ws2['B4'].font = Font(color='FF6B6B' if total_v else '4ADE80', bold=True)
-    ws2['A5'] = '내부위반 건수'
-    ws2['B5'] = total_i
-    ws2['B5'].font = Font(color='FFD166' if total_i else '4ADE80', bold=True)
-    ws2['A6'] = '생성일시'
-    ws2['B6'] = datetime.now().strftime('%Y-%m-%d %H:%M')
+    ws2['A3'] = '총 운항편수'
+    ws2['B3'] = total_flights
+    ws2['B3'].font = Font(bold=True)
+    ws2['A4'] = '  - 페리(F) 편수'
+    ws2['B4'] = total_ferry
+    ws2['A5'] = '위반 발생일수'
+    ws2['B5'] = len(all_results)
+    ws2['A6'] = '규정위반 건수'
+    ws2['B6'] = total_v
+    ws2['B6'].font = Font(color='FF6B6B' if total_v else '4ADE80', bold=True)
+    ws2['A7'] = '내부위반 건수'
+    ws2['B7'] = total_i
+    ws2['B7'].font = Font(color='FFD166' if total_i else '4ADE80', bold=True)
+    ws2['A8'] = '생성일시'
+    ws2['B8'] = datetime.now().strftime('%Y-%m-%d %H:%M')
     ws2.column_dimensions['A'].width = 18
     ws2.column_dimensions['B'].width = 20
     default_font = Font(name='맑은 고딕', size=11)
-    for row in ws2.iter_rows(min_row=3, max_row=6):
+    for row in ws2.iter_rows(min_row=3, max_row=8):
         for cell in row:
             if not cell.font or not cell.font.name:
                 cell.font = default_font
@@ -618,7 +670,7 @@ def get_target_month():
 
 async def main():
     print('='*50)
-    print('✈  편조점검 월간 자동 조회 v3.1')
+    print('✈  편조점검 월간 자동 조회 v3.5')
     print('    (2026-08-14) | 문의: 승무계획팀')
     print('='*50)
 
@@ -642,6 +694,8 @@ async def main():
         await asyncio.get_event_loop().run_in_executor(None, input, '  [로그인 완료 후 엔터] ')
 
         all_results = []
+        total_flights = 0
+        total_ferry = 0
 
         for day in range(start_day, last_day + 1):
             global _current_schedule_date
@@ -671,14 +725,17 @@ async def main():
                     continue
 
                 blocks = parse_blocks(row_objs)
-                violations, internalV = check(blocks, sp_ban, sp_ok)
+                violations, internalV, daily_total, daily_ferry = check(blocks, sp_ban, sp_ok)
+                total_flights += daily_total
+                total_ferry += daily_ferry
+                ferry_txt = f", 페리 {daily_ferry}편" if daily_ferry else ''
 
                 if violations or internalV:
                     all_results.append((date_str, violations, internalV))
                     n_int = sum(1 for v in internalV if not v.get('note'))
                     n_note = len(internalV) - n_int
                     note_txt = f" / ℹ️ 참고 {n_note}건" if n_note else ''
-                    print(f"🚨 규정위반 {len(violations)}건 / ⚠️ 내부위반 {n_int}건{note_txt}")
+                    print(f"🚨 규정위반 {len(violations)}건 / ⚠️ 내부위반 {n_int}건{note_txt} (총 {daily_total}편{ferry_txt})")
                     for v in violations:
                         ap = f" ({v['ap']})" if v.get('ap') else ''
                         print(f"    🚨 [{v['fl']}] {v['detail']}{ap} | {v['pair']}")
@@ -686,7 +743,7 @@ async def main():
                         icon = 'ℹ️ ' if v.get('note') else '⚠️ '
                         print(f"    {icon} [{v['fl']}] {v['detail']} | {v['pair']}")
                 else:
-                    print('✅ 이상없음')
+                    print(f'✅ 이상없음 (총 {daily_total}편{ferry_txt})')
 
                 await page.wait_for_timeout(1200)
 
@@ -698,13 +755,19 @@ async def main():
         await browser.close()
 
     if not all_results:
+        diff_msg = record_and_compare(year, month, total_flights, total_ferry)
         print(f'\n✅ {year}년 {month:02d}월 전체 위반사항 없음')
+        print(f'   ✈️  이번 달 총 운항편수: {total_flights}편 (페리 {total_ferry}편 포함)')
+        print(f'   📊 {diff_msg}')
         input('\n엔터 누르면 종료...')
         return
 
-    out_path, total_v, total_i = save_excel(all_results, year, month)
+    diff_msg = record_and_compare(year, month, total_flights, total_ferry)
+    out_path, total_v, total_i = save_excel(all_results, year, month, total_flights, total_ferry)
     print(f'\n{"="*50}')
     print(f'✅ 조회 완료: {len(all_results)}일 위반 발생 ({start_day}일~{last_day}일)')
+    print(f'   ✈️  이번 달 총 운항편수: {total_flights}편 (페리 {total_ferry}편 포함)')
+    print(f'   📊 {diff_msg}')
     print(f'   🚨 규정위반: {total_v}건')
     print(f'   ⚠️  내부위반: {total_i}건')
     print(f'\n저장 완료: {out_path}')
