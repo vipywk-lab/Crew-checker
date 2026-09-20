@@ -62,8 +62,8 @@
   if(!rows.length){alert('편조 데이터를 찾을 수 없습니다.');return;}
   var raw=rows;
   var dm=location.href.match(/d=(\d{4}-\d{2}-\d{2})/);
-  var VERSION='v34';
-  var UPDATED='2026-09-05';
+  var VERSION='v35';
+  var UPDATED='2026-09-21';
   var date=dm?dm[1].replace(/-/g,'/'):'날짜미상';
   var ym=dm?dm[1].slice(0,7):'';
   var scheduleDate=dm?dm[1]:new Date().toISOString().slice(0,10);
@@ -347,7 +347,7 @@
   function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
   function row(cells){return '<tr>'+(cells.map(function(c){return'<td>'+c+'</td>';}).join(''))+'</tr>';}
 
-  var STYLE='#_crewck *{box-sizing:border-box}#_crewck .st{display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap}#_crewck .st>div{flex:1;background:#1e3a5f;border-radius:8px;padding:8px;text-align:center}#_crewck .st b{display:block;font-size:18px;font-weight:700}#_crewck .st small{font-size:10px;color:#888}#_crewck .st.bad{background:#5f1e1e}#_crewck .st.bad b{color:#ff6b6b}#_crewck .st.warn{background:#4a3a1e}#_crewck .st.warn b{color:#ffd166}#_crewck .st b.bl{color:#4fc3f7}#_crewck .sec{border-radius:8px;padding:10px;margin-bottom:8px;font-size:11px}#_crewck .sec h4{margin-bottom:6px;font-weight:700;font-size:12px}#_crewck .sec.v{background:#3a1e1e;border:1px solid #ff6b6b44}#_crewck .sec.v h4{color:#ff6b6b}#_crewck .sec.i{background:#3a2e1e;border:1px solid #ffd16644}#_crewck .sec.i h4{color:#ffd166}#_crewck .sec.ok{background:#1e2a1e;border:1px solid #4ade8044}#_crewck .sec.ok h4{color:#86efac}#_crewck .sec.info{background:#1e2a3a}#_crewck .sec.info h4{color:#4fc3f7}#_crewck .sec table{width:100%;border-collapse:collapse}#_crewck .sec td{padding:4px 8px;border-bottom:1px solid #2a2a3e}#_crewck .ok{color:#4ade80}#_crewck .bad{color:#ff6b6b}#_crewck .lbl{color:#aaa;margin:5px 0 3px}#_crewck .none{color:#4ade80;text-align:center;padding:30px;font-size:14px}#_crewck .tabs{display:flex;gap:4px;margin-bottom:10px}#_crewck .tab{flex:1;background:#1e2a3a;border:1px solid #2a3a4a;color:#888;padding:7px;border-radius:6px;font-size:11px;cursor:pointer;font-weight:700}#_crewck .tab:hover{background:#26344a;color:#ccc}#_crewck .tab.on{background:#E4002B;border-color:#E4002B;color:#fff}';
+  var STYLE='#_crewck *{box-sizing:border-box}#_crewck .st{display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap}#_crewck .st>div{flex:1;background:#1e3a5f;border-radius:8px;padding:8px;text-align:center}#_crewck .st b{display:block;font-size:18px;font-weight:700}#_crewck .st small{font-size:10px;color:#888}#_crewck .st.bad{background:#5f1e1e}#_crewck .st.bad b{color:#ff6b6b}#_crewck .st.warn{background:#4a3a1e}#_crewck .st.warn b{color:#ffd166}#_crewck .st b.bl{color:#4fc3f7}#_crewck .sec{border-radius:8px;padding:10px;margin-bottom:8px;font-size:11px}#_crewck .sec h4,#_crewck .sec summary{margin-bottom:6px;font-weight:700;font-size:12px}#_crewck .sec summary{cursor:pointer;user-select:none}#_crewck .sec summary::marker{color:#666}#_crewck .sec.v{background:#3a1e1e;border:1px solid #ff6b6b44}#_crewck .sec.v h4,#_crewck .sec.v summary{color:#ff6b6b}#_crewck .sec.i{background:#3a2e1e;border:1px solid #ffd16644}#_crewck .sec.i h4,#_crewck .sec.i summary{color:#ffd166}#_crewck .sec.ok{background:#1e2a1e;border:1px solid #4ade8044}#_crewck .sec.ok h4,#_crewck .sec.ok summary{color:#86efac}#_crewck .sec.info{background:#1e2a3a}#_crewck .sec.info h4,#_crewck .sec.info summary{color:#4fc3f7}#_crewck .sec.trn{background:#2a1e3a;border:1px solid #a855f744}#_crewck .sec.trn h4,#_crewck .sec.trn summary{color:#c4a5f7}#_crewck .sec table{width:100%;border-collapse:collapse}#_crewck .sec td{padding:4px 8px;border-bottom:1px solid #2a2a3e}#_crewck .ok{color:#4ade80}#_crewck .bad{color:#ff6b6b}#_crewck .lbl{color:#aaa;margin:5px 0 3px}#_crewck .none{color:#4ade80;text-align:center;padding:30px;font-size:14px}#_crewck .tabs{display:flex;gap:4px;margin-bottom:10px}#_crewck .tab{flex:1;background:#1e2a3a;border:1px solid #2a3a4a;color:#888;padding:7px;border-radius:6px;font-size:11px;cursor:pointer;font-weight:700}#_crewck .tab:hover{background:#26344a;color:#ccc}#_crewck .tab.on{background:#E4002B;border-color:#E4002B;color:#fff}';
 
   function tabBar(mode){
     var h='<div class="tabs">';
@@ -445,16 +445,21 @@
       h+='</tbody></table></div>';
     }
     if(r.capTrainee.length){
-      h+='<div class="sec ok"><h4>✈️ 기장훈련생 페어링 (등급체크 제외) '+r.capTrainee.length+'건</h4><table><tbody>';
+      h+='<div class="sec trn"><h4>✈️ 기장훈련생 페어링 (등급체크 제외) '+r.capTrainee.length+'건</h4><table><tbody>';
       r.capTrainee.forEach(function(x){h+=row([esc(x.cap)+' / '+esc(x.fo)+'('+esc(x.grade)+')',esc(x.fl)]);});
       h+='</tbody></table></div>';
     }
     if(r.ccap.length||r.cfo.length||r.aap.length){
-      h+='<div class="sec info"><h4>📋 등급별 편조</h4>';
+      var gpV=r.ccap.filter(function(x){return!x.ok;}).length+r.cfo.filter(function(x){return!x.ok;}).length+r.aap.filter(function(x){return!x.ok;}).length;
+      var cntParts=[];
+      if(r.ccap.length)cntParts.push('C기장 '+r.ccap.length);
+      if(r.cfo.length)cntParts.push('C부기장 '+r.cfo.length);
+      if(r.aap.length)cntParts.push('A공항 '+r.aap.length);
+      h+='<details class="sec info"'+(gpV?' open':'')+'><summary>📋 등급별 편조 ('+cntParts.join(' / ')+')'+(gpV?' <span class="bad">⚠위반 '+gpV+'</span>':'')+'</summary>';
       if(r.ccap.length){h+='<div class="lbl">C기장</div><table><tbody>';r.ccap.forEach(function(x){h+=row([esc(x.p),esc(x.fl),x.ok?'<span class="ok">✓정상</span>':'<span class="bad">✗위반</span>']);});h+='</tbody></table>';}
       if(r.cfo.length){h+='<div class="lbl">C부기장</div><table><tbody>';r.cfo.forEach(function(x){h+=row([esc(x.p),esc(x.fl),x.ok?'<span class="ok">✓정상</span>':'<span class="bad">✗위반</span>']);});h+='</tbody></table>';}
       if(r.aap.length){h+='<div class="lbl">A공항</div><table><tbody>';r.aap.forEach(function(x){h+=row([esc(x.p),esc(x.fl),esc(x.ap),x.ok?'<span class="ok">✓</span>':'<span class="bad">✗</span>']);});h+='</tbody></table>';}
-      h+='</div>';
+      h+='</details>';
     }
     if(r.specials.length){
       h+='<div class="sec ok"><h4>ℹ️ 특이사항 '+r.specials.length+'건</h4>';
