@@ -62,7 +62,7 @@
   if(!rows.length){alert('편조 데이터를 찾을 수 없습니다.');return;}
   var raw=rows;
   var dm=location.href.match(/d=(\d{4}-\d{2}-\d{2})/);
-  var VERSION='v37';
+  var VERSION='v38';
   var UPDATED='2026-09-22';
   var date=dm?dm[1].replace(/-/g,'/'):'날짜미상';
   var ym=dm?dm[1].slice(0,7):'';
@@ -353,7 +353,7 @@
         }
       });
     });
-    return{violations:violations,internalV:internalV,specials:specials,ccap:ccap,cfo:cfo,aap:aap,intok:intok,domList:domList,total:flSet.size,ferry:ferrySet.size,capTrainee:capTrainee};
+    return{violations:violations,internalV:internalV,specials:specials,ccap:ccap,cfo:cfo,aap:aap,intok:intok,domList:domList,total:flSet.size,ferry:ferrySet.size,ferryList:Array.from(ferrySet),capTrainee:capTrainee};
   }
 
   function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
@@ -436,7 +436,7 @@
     if(mode==='dom')return renderDom(r);
     var vc=r.violations.length,ic=r.internalV.length,h=tabBar('all');
     h+='<div class="st">';
-    h+='<div><b>'+r.total+'</b><small>총편수'+(r.ferry?' (F '+r.ferry+')':'')+'</small></div>';
+    h+='<div'+(r.ferry?' title="페리편: '+esc(r.ferryList.join(', '))+'"':'')+'><b>'+r.total+'</b><small>총편수'+(r.ferry?'<br>(페리 '+r.ferry+'편 포함)':'')+'</small></div>';
     h+='<div class="'+(vc?'bad':'')+'"><b class="'+(vc?'':'bl')+'">'+vc+'</b><small>규정위반</small></div>';
     h+='<div class="'+(ic?'warn':'')+'"><b class="'+(ic?'':'bl')+'">'+ic+'</b><small>내부위반</small></div>';
     h+='<div><b>'+r.specials.length+'</b><small>특이사항</small></div>';
