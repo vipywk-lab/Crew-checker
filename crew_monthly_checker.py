@@ -1,5 +1,6 @@
 # ==========================================
 # crew_monthly_checker.py
+# 버전: v3.8 (2026-09-22) — gradeOverride에 'from'(시작일) 지원 추가 — crew_check.js v39 와 동기화
 # 버전: v3.7 (2026-09-22) — 필요 라이브러리 자동 설치 추가 (bs4 미설치 오류 방지)
 # - v3.7: 실행 시 bs4/playwright/openpyxl 미설치를 자동 감지, pip 자동 설치 후 계속 진행
 #         (신규 PC/계정에서 "ModuleNotFoundError: No module named 'bs4'" 같은 오류로
@@ -129,12 +130,15 @@ def get_site_grade(s):
 # gradeOverride의 만료(until) 판정 기준으로 사용됨.
 _current_schedule_date = None
 
+def ov_active(ov, d):
+    return (not ov.get('from') or d >= ov['from']) and (not ov.get('until') or d <= ov['until'])
+
 def get_grade(s):
     n = get_name(s)
     if n in CFG["gradeOverride"]:
         ov = CFG["gradeOverride"][n]
         sd = _current_schedule_date or datetime.now().strftime('%Y-%m-%d')
-        if sd <= ov["until"]:
+        if ov_active(ov, sd):
             return ov["grade"]
     return get_site_grade(s)
 
@@ -389,7 +393,7 @@ def check(blocks, sp_ban, sp_ok):
             if nm in CFG['gradeOverride']:
                 ov0 = CFG['gradeOverride'][nm]
                 sd0 = _current_schedule_date or datetime.now().strftime('%Y-%m-%d')
-                if sd0 <= ov0['until'] and sg == ov0['grade']:
+                if ov_active(ov0, sd0) and sg == ov0['grade']:
                     internalV.append({'type': '참고', 'note': True,
                                        'detail': '✅사이트 등급 갱신 확인(오버라이드 해제 가능)',
                                        'fl': fls, 'pair': f"{nm}({sg})", 'dom': cur_dom})
@@ -695,7 +699,7 @@ def get_target_month():
 
 async def main():
     print('='*50)
-    print('✈  편조점검 월간 자동 조회 v3.7')
+    print('✈  편조점검 월간 자동 조회 v3.8')
     print('    (2026-08-14) | 문의: 승무계획팀')
     print('='*50)
 

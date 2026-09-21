@@ -62,7 +62,7 @@
   if(!rows.length){alert('편조 데이터를 찾을 수 없습니다.');return;}
   var raw=rows;
   var dm=location.href.match(/d=(\d{4}-\d{2}-\d{2})/);
-  var VERSION='v38';
+  var VERSION='v39';
   var UPDATED='2026-09-22';
   var date=dm?dm[1].replace(/-/g,'/'):'날짜미상';
   var ym=dm?dm[1].slice(0,7):'';
@@ -105,11 +105,12 @@
     var m=s.match(/^[가-힣]{2,5}([ABCX])(LV)?/);
     return m?m[1]:'';
   }
+  function ovActive(ov,d){return(!ov.from||d>=ov.from)&&(!ov.until||d<=ov.until);}
   function getGrade(s){
     var n=getName(s);
     if(CFG.gradeOverride.has(n)){
       var ov=CFG.gradeOverride.get(n);
-      if(scheduleDate<=ov.until)return ov.grade;
+      if(ovActive(ov,scheduleDate))return ov.grade;
     }
     return getSiteGrade(s);
   }
@@ -253,7 +254,7 @@
         var nm=getName(raw),sg=getSiteGrade(raw);
         if(CFG.gradeOverride.has(nm)){
           var ov0=CFG.gradeOverride.get(nm);
-          if(scheduleDate<=ov0.until&&sg===ov0.grade){
+          if(ovActive(ov0,scheduleDate)&&sg===ov0.grade){
             sp('✅사이트 등급 갱신 확인(오버라이드 해제 가능)',fls,nm+'('+sg+')');
           }
         }
