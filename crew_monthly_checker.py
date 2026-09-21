@@ -1,6 +1,9 @@
 # ==========================================
 # crew_monthly_checker.py
-# 버전: v3.6 (2026-09-22) — 부분합류 훈련생(기타칸) 세이프티 누락 버그 수정 — crew_check.js v37 과 로직 동기화
+# 버전: v3.7 (2026-09-22) — 필요 라이브러리 자동 설치 추가 (bs4 미설치 오류 방지)
+# - v3.7: 실행 시 bs4/playwright/openpyxl 미설치를 자동 감지, pip 자동 설치 후 계속 진행
+#         (신규 PC/계정에서 "ModuleNotFoundError: No module named 'bs4'" 같은 오류로
+#          바로 멈추는 대신, 처음 1회만 자동으로 설치하고 넘어감)
 # - v3.6: 기장셀 없는 행의 훈련생/동승자를 해당 레그에 병합(기존 FO 유지) → 세이프티 불가 FO 감지
 # - v3.5: 기장훈련생(FO등급 무관 예외) 처리 추가
 # - 파서 재작성: 부분합류 크루(기장셀 빈 행) 오인식 버그 수정
@@ -13,6 +16,21 @@
 # 기능: CMS 편조점검 월간 자동 조회 (규정위반/내부위반/참고 엑셀 저장)
 # 문의: 승무계획팀
 # ==========================================
+import subprocess
+import sys as _sys
+
+def _ensure_pkg(import_name, pip_name=None):
+    """PC/계정이 바뀌어 라이브러리가 없을 때 수동 설치 없이 자동으로 깔아준다."""
+    try:
+        __import__(import_name)
+    except ImportError:
+        print(f"[시스템] {pip_name or import_name} 라이브러리가 없어 자동으로 설치합니다... (최초 1회, 잠시 걸릴 수 있습니다)")
+        subprocess.run([_sys.executable, "-m", "pip", "install", pip_name or import_name],
+                        check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+for _imp, _pip in [("bs4", "beautifulsoup4"), ("playwright", "playwright"), ("openpyxl", "openpyxl")]:
+    _ensure_pkg(_imp, _pip)
+
 import asyncio
 import re
 import calendar
@@ -677,7 +695,7 @@ def get_target_month():
 
 async def main():
     print('='*50)
-    print('✈  편조점검 월간 자동 조회 v3.6')
+    print('✈  편조점검 월간 자동 조회 v3.7')
     print('    (2026-08-14) | 문의: 승무계획팀')
     print('='*50)
 
