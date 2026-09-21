@@ -1,6 +1,11 @@
 # ==========================================
 # crew_monthly_checker.py
-# 버전: v3.8 (2026-09-22) — gradeOverride에 'from'(시작일) 지원 추가 — crew_check.js v39 와 동기화
+# 버전: v3.11 (2026-09-22) — 엑셀 결과 시트 가독성 추가 개선
+# - v3.11: 긴 내용이 잘리지 않게 행높이 자동 계산 / 셀 테두리 추가 / 헤더 행 고정(freeze_panes)
+# - v3.10: 규정위반/내부위반/참고 행 배경을 다크 톤 → 엑셀 표준 옅은 색(빨강/노랑/파랑) + 진한 글씨로 교체
+# 버전: v3.9 (2026-09-22) — 엑셀 저장 위치를 못 찾는 문제("파일이 안 보인다") 개선
+# - v3.9: 바탕화면 경로를 Windows 레지스트리에서 직접 조회(OneDrive 리디렉션 정확히 잡아냄)
+#         + 저장 후 파일 자동으로 열어줌 (경로 찾아 헤맬 필요 없음)
 # - v3.8: 등급 강제 오버라이드에 시작일(from) 지원 추가 (기존엔 종료일 until 만 가능)
 # - v3.7: 실행 시 bs4/playwright/openpyxl 미설치를 자동 감지, pip 자동 설치 후 계속 진행
 #         (신규 PC/계정에서 "ModuleNotFoundError: No module named 'bs4'" 같은 오류로
@@ -39,7 +44,7 @@ from datetime import datetime
 from bs4 import BeautifulSoup
 from playwright.async_api import async_playwright, TimeoutError as PWTimeout
 import openpyxl
-from openpyxl.styles import Font, PatternFill, Alignment
+from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from tkinter import messagebox
 import tkinter as tk
 import os
@@ -53,7 +58,7 @@ HEADLESS = False
 # 콘솔 배너(main() 상단)가 이 두 값을 그대로 출력한다.
 # 버전을 올릴 때 파일 맨 위 changelog 주석뿐 아니라 여기도 같이 바꿔야
 # 배너에 날짜가 안 밀린다 (v3.8 이전엔 배너 날짜가 하드코딩돼 있어 밀렸던 문제 수정).
-VERSION = 'v3.8'
+VERSION = 'v3.11'
 UPDATED = '2026-09-22'
 # ==========================================
 # 편조점검 규칙 로딩
@@ -524,9 +529,33 @@ def check(blocks, sp_ban, sp_ok):
 
     return violations, internalV, len(fl_set), len(ferry_set)
 
+def _registry_desktop_path():
+    """Windows 레지스트리에 기록된 실제 바탕화면 경로를 읽는다.
+    OneDrive로 바탕화면이 리디렉션된 경우 env 변수(OneDrive 등)로는 못 잡아내는
+    케이스가 있어("엑셀 파일이 안 보인다" 원인) 가장 신뢰도 높은 방법인 레지스트리를
+    최우선으로 시도한다."""
+    try:
+        import winreg
+        key = winreg.OpenKey(
+            winreg.HKEY_CURRENT_USER,
+            r'Software\Microsoft\Windows\CurrentVersion\Explorer\User Shell Folders'
+        )
+        path, _ = winreg.QueryValueEx(key, 'Desktop')
+        path = os.path.expandvars(path)
+        if os.path.isdir(path):
+            return path
+    except Exception:
+        pass
+    return None
+
 def get_desktop_path():
-    """OneDrive로 바탕화면이 동기화된 환경(회사 PC에 흔함)에서도 실제 존재하는
-    바탕화면 폴더를 찾는다. 어디에도 없으면 스크립트가 있는 폴더에 저장(항상 성공)."""
+    """실제 바탕화면 폴더를 찾는다. OneDrive로 바탕화면이 동기화된 환경(회사 PC에
+    흔함)에서도 정확히 잡아내도록 레지스트리 경로를 최우선으로 확인하고,
+    실패하면 OneDrive 환경변수 기반 추정으로 폴백한다. 어디에도 없으면
+    스크립트가 있는 폴더에 저장(항상 성공)."""
+    reg_path = _registry_desktop_path()
+    if reg_path:
+        return reg_path
     candidates = []
     onedrive = os.environ.get('OneDrive') or os.environ.get('OneDriveConsumer') or os.environ.get('OneDriveCommercial')
     if onedrive:
@@ -586,21 +615,41 @@ def save_excel(all_results, year, month, total_flights=0, total_ferry=0):
     ws = wb.active
     ws.title = f"{year}년{month:02d}월_위반사항"
 
+    # 엑셀 화면 색상: 북마클릿(다크 UI)에 쓰던 진한 배경색을 그대로 가져다 써서
+    # 기본 검정 글씨와 대비가 낮아 "색이 이상하다"는 지적을 받음 → 엑셀에서
+    # 흔히 쓰는 옅은 배경 + 진한 글씨 조합(가독성/인쇄 모두 고려)으로 교체.
     hdr_font = Font(name='맑은 고딕', bold=True, color='FFFFFF', size=10)
     hdr_fill  = PatternFill('solid', start_color='1F3864')
-    v_fill    = PatternFill('solid', start_color='3A1E1E')
-    i_fill    = PatternFill('solid', start_color='3A2E1E')
-    n_fill    = PatternFill('solid', start_color='1E2A3A')
+    v_fill    = PatternFill('solid', start_color='FFC7CE')  # 규정위반: 옅은 빨강
+    v_font    = Font(name='맑은 고딕', size=10, color='9C0006')  # 진한 빨강 글씨
+    i_fill    = PatternFill('solid', start_color='FFEB9C')  # 내부위반: 옅은 노랑
+    i_font    = Font(name='맑은 고딕', size=10, color='9C6500')  # 진한 갈색 글씨
+    n_fill    = PatternFill('solid', start_color='DDEBF7')  # 참고: 옅은 파랑
+    n_font    = Font(name='맑은 고딕', size=10, color='1F3864')  # 진한 남색 글씨
     center = Alignment(horizontal='center', vertical='center')
     wrap   = Alignment(wrap_text=True, vertical='center')
+    thin_border = Border(*[Side(style='thin', color='D9D9D9')] * 4)  # 셀 구분용 옅은 회색 테두리
+
+    DETAIL_W, PAIR_W = 32, 28  # 위반유형/페어링 컬럼 너비 (아래 행높이 계산에도 사용)
+
+    # 긴 내용이 줄바꿈되어도 잘리지 않도록, 텍스트 길이 기준으로 필요한 줄 수만큼
+    # 행높이를 늘려준다 (한글은 폭이 넓어 한 줄에 들어가는 글자 수를 보수적으로 잡음).
+    def row_height(detail, pair):
+        def lines(text, col_w):
+            per_line = max(1, int(col_w / 1.9))
+            n = len(str(text or ''))
+            return -(-n // per_line) if n else 1  # 올림 나눗셈
+        max_lines = max(lines(detail, DETAIL_W), lines(pair, PAIR_W))
+        return max(16, max_lines * 15 + 5)
 
     headers = ['날짜', '구분', '편명', '위반유형', '페어링', '공항', '국내/국제']
-    widths  = [12, 8, 12, 32, 28, 8, 10]
+    widths  = [12, 8, 12, DETAIL_W, PAIR_W, 8, 10]
     for col, (h, w) in enumerate(zip(headers, widths), 1):
         c = ws.cell(1, col, h)
-        c.font, c.fill, c.alignment = hdr_font, hdr_fill, center
+        c.font, c.fill, c.alignment, c.border = hdr_font, hdr_fill, center, thin_border
         ws.column_dimensions[c.column_letter].width = w
     ws.row_dimensions[1].height = 20
+    ws.freeze_panes = 'A2'  # 아래로 스크롤해도 헤더가 항상 보이게
 
     row_idx = 2
     total_v = total_i = 0
@@ -616,14 +665,16 @@ def save_excel(all_results, year, month, total_flights=0, total_ferry=0):
             ws.cell(row_idx, 7, '국내선' if v.get('dom') else '국제선').alignment = center
             for col in range(1, 8):
                 ws.cell(row_idx, col).fill = v_fill
-                ws.cell(row_idx, col).font = Font(name='맑은 고딕', size=10)
-            ws.row_dimensions[row_idx].height = 16
+                ws.cell(row_idx, col).font = v_font
+                ws.cell(row_idx, col).border = thin_border
+            ws.row_dimensions[row_idx].height = row_height(v['detail'], v['pair'])
             row_idx += 1
             total_v += 1
 
         for v in internalV:
             is_note = v.get('note', False)
             fill = n_fill if is_note else i_fill
+            rfont = n_font if is_note else i_font
             ws.cell(row_idx, 1, date_str).alignment = center
             ws.cell(row_idx, 2, 'ℹ️참고' if is_note else '⚠️내부위반').alignment = center
             ws.cell(row_idx, 3, v['fl']).alignment = center
@@ -633,8 +684,9 @@ def save_excel(all_results, year, month, total_flights=0, total_ferry=0):
             ws.cell(row_idx, 7, '국내선' if v.get('dom') else '국제선').alignment = center
             for col in range(1, 8):
                 ws.cell(row_idx, col).fill = fill
-                ws.cell(row_idx, col).font = Font(name='맑은 고딕', size=10)
-            ws.row_dimensions[row_idx].height = 16
+                ws.cell(row_idx, col).font = rfont
+                ws.cell(row_idx, col).border = thin_border
+            ws.row_dimensions[row_idx].height = row_height(v['detail'], v['pair'])
             row_idx += 1
             if not is_note:
                 total_i += 1
@@ -805,6 +857,10 @@ async def main():
     print(f'   🚨 규정위반: {total_v}건')
     print(f'   ⚠️  내부위반: {total_i}건')
     print(f'\n저장 완료: {out_path}')
+    try:
+        os.startfile(out_path)  # 저장 위치를 못 찾아 헤매지 않도록 자동으로 열어줌
+    except Exception as e:
+        print(f'(파일을 자동으로 여는 데 실패했습니다: {e} — 위 경로에서 직접 열어주세요)')
     input('\n엔터 누르면 종료...')
 
 if __name__ == '__main__':
