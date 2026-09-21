@@ -1,6 +1,8 @@
 # ==========================================
 # crew_monthly_checker.py
-# 버전: v3.5 (2026-09-08) — 기장훈련생(FO등급 무관 예외) 처리 추가 — crew_check.js v26 과 룰 동기화
+# 버전: v3.6 (2026-09-22) — 부분합류 훈련생(기타칸) 세이프티 누락 버그 수정 — crew_check.js v37 과 로직 동기화
+# - v3.6: 기장셀 없는 행의 훈련생/동승자를 해당 레그에 병합(기존 FO 유지) → 세이프티 불가 FO 감지
+# - v3.5: 기장훈련생(FO등급 무관 예외) 처리 추가
 # - 파서 재작성: 부분합류 크루(기장셀 빈 행) 오인식 버그 수정
 # - 레그 단위 정밀 판정: 실제 담당 구간의 인원만 위반 판정
 # - 세이프티 명단 월별 자동 적용(SP_BY_MONTH), 조회일 기준 자동선택
@@ -195,7 +197,7 @@ def parse_table(html):
 
         line = (' '.join(ordered) + ' ' + rest).strip()
         if line:
-            rows.append({'line': line, 'hasCap': len(caps) > 0})
+            rows.append({'line': line, 'hasCap': len(caps) > 0, 'nFo': len(fos)})
     return rows
 
 TOKEN_RE = re.compile(
@@ -217,7 +219,7 @@ def parse_blocks(row_objs):
         if re.match(r'^LV$', L) and merged and re.search(r'[가-힣]{2,5}[ABCX]?$', merged[-1]['line']):
             merged[-1]['line'] += L
         else:
-            merged.append({'line': L, 'hasCap': o['hasCap']})
+            merged.append({'line': L, 'hasCap': o['hasCap'], 'nFo': o.get('nFo')})
     clean = [o for o in merged if not is_junk(o['line'])]
 
     # 각 행(line)을 하나의 block으로 파싱 (line=block 1:1), hasCap 보존
@@ -242,7 +244,7 @@ def parse_blocks(row_objs):
             else:
                 i += 1
         if names or flights:
-            blocks.append({'names': names, 'flights': flights, 'hasCap': o['hasCap']})
+            blocks.append({'names': names, 'flights': flights, 'hasCap': o['hasCap'], 'nFo': o.get('nFo')})
 
     # 편명만 있고 이름 없는 block은 앞 block에 편명 흡수 (연속 편명 대응)
     blk2 = []
@@ -264,39 +266,44 @@ def parse_blocks(row_objs):
             pending.append(b)
 
     # 부분합류 병합: 기장 없는 행을 편명 겹치는 편조에 레그 단위로 정확히 붙임
+    def is_sub(n):
+        return get_grade(n) in ('X', '')
+
     for p in pending:
-        all_xor = all(get_grade(n) in ('X', '') for n in p['names'])
-        if all_xor:
-            p['asSolo'] = True
-            solos.append(p)
-            continue
+        # FO셀/기타셀 구분: nFo 없으면(구조 미상) 기존처럼 첫 이름=FO
+        n_fo = p['nFo'] if isinstance(p.get('nFo'), int) else 1
+        p_fos, p_extras = p['names'][:n_fo], p['names'][n_fo:]
         pfl = {f['fl'] for f in p['flights']}
         target, best = None, 0
         for m in mains:
-            mfl = {f['fl'] for f in m['flights']}
-            cnt = len(pfl & mfl)
+            cnt = len(pfl & {f['fl'] for f in m['flights']})
             if cnt > best:
                 best, target = cnt, m
         if target and best > 0:
-            p_fo = p['names'][0]
-            p_extra = p['names'][1:]
+            # 등급 있는 FO셀 인원 → 해당 레그 FO 교대 / 훈련생·DH(무등급·X)와 기타셀 인원 → 기존 FO 유지하고 동승자로 추가
+            fo_real = [n for n in p_fos if not is_sub(n)]
+            add = [n for n in p_fos if is_sub(n)] + p_extras
             for leg in target['legs']:
-                if leg['fl'] in pfl:
-                    leg['fo'] = p_fo
-                    leg['extra'] = p_extra
-            # 대표 표시값(패널/엑셀 상단 cap/fo 요약용)
+                if leg['fl'] not in pfl:
+                    continue
+                if fo_real:
+                    leg['fo'] = fo_real[0]
+                    leg['extra'] = fo_real[1:] + add
+                else:
+                    leg['extra'] = leg['extra'] + add
+            # 대표 표시값(엑셀 상단 cap/fo 요약용)
             for nm in p['names']:
                 if not target['fo']:
                     target['fo'] = nm
-                else:
+                elif nm != target['fo'] and nm not in target['extra']:
                     target['extra'].append(nm)
-        elif len(p['names']) >= 2:
+        elif not all(is_sub(n) for n in p['names']) and len(p['names']) >= 2:
             fo = p['names'][1]
             extra = p['names'][2:]
             mains.append({'cap': p['names'][0], 'fo': fo, 'extra': extra,
                            'flights': p['flights'], 'legs': make_legs(p['flights'], fo, extra)})
         else:
-            p['asSolo'] = True
+            p['asSolo'] = True   # 겹치는 편조 없음 → 별도 표시
             solos.append(p)
 
     # 4인편성 split
@@ -344,7 +351,7 @@ def check(blocks, sp_ban, sp_ok):
             dom0 = bool(b['flights']) and any(is_dom_tab(f['rt']) for f in b['flights'])
             for n in b.get('names', []):
                 g = get_grade(n)
-                label = 'DH/훈련' if g == 'X' else '추가 탑승'
+                label = 'DH/훈련' if g == 'X' else '추가탑승'
                 internalV.append({'type': '참고', 'note': True, 'detail': label,
                                    'fl': fls0, 'pair': get_name(n), 'dom': dom0})
             continue
@@ -670,7 +677,7 @@ def get_target_month():
 
 async def main():
     print('='*50)
-    print('✈  편조점검 월간 자동 조회 v3.5')
+    print('✈  편조점검 월간 자동 조회 v3.6')
     print('    (2026-08-14) | 문의: 승무계획팀')
     print('='*50)
 

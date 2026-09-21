@@ -57,13 +57,13 @@
     }
     ordered=ordered.concat(extras);
     var line=(ordered.join(' ')+rest).trim();
-    if(line)rows.push({line:line,hasCap:caps.length>0});
+    if(line)rows.push({line:line,hasCap:caps.length>0,nFo:fos.length});
   });
   if(!rows.length){alert('편조 데이터를 찾을 수 없습니다.');return;}
   var raw=rows;
   var dm=location.href.match(/d=(\d{4}-\d{2}-\d{2})/);
-  var VERSION='v36';
-  var UPDATED='2026-09-21';
+  var VERSION='v37';
+  var UPDATED='2026-09-22';
   var date=dm?dm[1].replace(/-/g,'/'):'날짜미상';
   var ym=dm?dm[1].slice(0,7):'';
   var scheduleDate=dm?dm[1]:new Date().toISOString().slice(0,10);
@@ -122,7 +122,7 @@
       var L=o.line;
       if(/^LV$/.test(L)&&merged.length>0&&/[가-힣]{2,5}[ABCX]?$/.test(merged[merged.length-1].line)){
         merged[merged.length-1].line+=L;
-      }else merged.push({line:L,hasCap:o.hasCap});
+      }else merged.push({line:L,hasCap:o.hasCap,nFo:o.nFo});
     });
     var clean=merged.filter(function(o){return !isJunk(o.line);});
     // 각 행(line)을 하나의 block으로 파싱 (line=block 1:1), hasCap 보존
@@ -143,7 +143,7 @@
           if(i<N&&typed[i].t==='route'){var r=typed[i].v;i++;while(i<N&&typed[i].t==='time')i++;flights.push({fl:f,rt:r});}
         }else i++;
       }
-      if(names.length||flights.length)blocks.push({names:names,flights:flights,hasCap:o.hasCap});
+      if(names.length||flights.length)blocks.push({names:names,flights:flights,hasCap:o.hasCap,nFo:o.nFo});
     });
     // 편명만 있고 이름 없는 block은 앞 block에 편명 흡수 (연속 편명 대응)
     var blk2=[];
@@ -162,8 +162,10 @@
     });
     // 부분합류 병합: 기장 없는 행을 편명 겹치는 편조에 붙임 (레그 단위로 정확히 담당자 반영)
     pending.forEach(function(p){
-      var allXorNograde=p.names.every(function(n){var g=getGrade(n);return g==='X'||g==='';});
-      if(allXorNograde){p.asSolo=true;solos.push(p);return;} // 무등급/X 전원 → 실제구간 보존 위해 별도 표시
+      function isSub(n){var g=getGrade(n);return g==='X'||g==='';}
+      // FO셀/기타셀 구분: nFo 없으면(구조 미상) 기존처럼 첫 이름=FO
+      var nFo=(typeof p.nFo==='number')?p.nFo:1;
+      var pFos=p.names.slice(0,nFo),pExtras=p.names.slice(nFo);
       var pfl=new Set(p.flights.map(function(f){return f.fl;})),target=null,best=0;
       mains.forEach(function(m){
         var mfl=new Set(m.flights.map(function(f){return f.fl;})),cnt=0;
@@ -171,13 +173,22 @@
         if(cnt>best){best=cnt;target=m;}
       });
       if(target&&best>0){
-        var pFo=p.names[0],pExtra=p.names.slice(1);
-        target.legs.forEach(function(leg){if(pfl.has(leg.fl)){leg.fo=pFo;leg.extra=pExtra;}});
-        p.names.forEach(function(nm){if(!target.fo)target.fo=nm;else target.extra.push(nm);}); // 대표 표시값
-      }else if(p.names.length>=2){
+        // 등급 있는 FO셀 인원 → 해당 레그 FO 교대 / 훈련생·DH(무등급·X)와 기타셀 인원 → 기존 FO 유지하고 동승자로 추가
+        var foReal=pFos.filter(function(n){return !isSub(n);});
+        var add=pFos.filter(isSub).concat(pExtras);
+        target.legs.forEach(function(leg){
+          if(!pfl.has(leg.fl))return;
+          if(foReal.length){leg.fo=foReal[0];leg.extra=foReal.slice(1).concat(add);}
+          else leg.extra=leg.extra.concat(add);
+        });
+        p.names.forEach(function(nm){ // 대표 표시값
+          if(!target.fo)target.fo=nm;
+          else if(nm!==target.fo&&target.extra.indexOf(nm)<0)target.extra.push(nm);
+        });
+      }else if(!p.names.every(isSub)&&p.names.length>=2){
         mains.push({cap:p.names[0],fo:p.names[1],extra:p.names.slice(2),flights:p.flights,
           legs:mkLegs(p.flights,p.names[1],p.names.slice(2))});
-      }else{p.asSolo=true;solos.push(p);}
+      }else{p.asSolo=true;solos.push(p);} // 겹치는 편조 없음 → 별도 표시
     });
     // 4인편성 split
     var result=[];
@@ -210,7 +221,8 @@
 
   function check(blocks){
     var violations=[],internalV=[],specials=[],ccap=[],cfo=[],aap=[],intok=[],domList=[],capTrainee=[];
-    var seen={cc:new Set(),cf:new Set(),aa:new Set(),sp:new Set(),io:new Set()};
+    var seen={cc:new Map(),cf:new Map(),aa:new Map(),sp:new Set(),io:new Set()};
+    function track(arr,map,key,obj){var e=map.get(key);if(!e){obj._f=obj.fl.split('/');map.set(key,obj);arr.push(obj);return;}obj.fl.split('/').forEach(function(f){if(e._f.indexOf(f)<0)e._f.push(f);});e.fl=e._f.join('/');if(!obj.ok)e.ok=false;}
     var flSet=new Set();
     var ferrySet=new Set();
     var curDom=false;
@@ -221,7 +233,7 @@
         var fls0=b.flights.map(function(f){return f.fl;}).join('/');
         b.flights.forEach(function(f){flSet.add(f.fl);if(/F$/.test(f.fl))ferrySet.add(f.fl);});
         b.names.forEach(function(n){
-          var g=getGrade(n),label=g==='X'?'DH/훈련':'추가 탑승';
+          var g=getGrade(n),label=g==='X'?'DH/훈련':'추가탑승';
           sp(label,fls0,getName(n));
         });
         return;
@@ -287,7 +299,7 @@
               if(obsAFO)ok=true;
             }
             var ck='cc|'+pair;
-            if(!seen.cc.has(ck)){seen.cc.add(ck);ccap.push({p:pair,fl:grpFls,ok:ok});}
+            track(ccap,seen.cc,ck,{p:pair,fl:grpFls,ok:ok});
             if(!ok){
               var msg=(grpFoEff==='SKIP'||grpFoEff==='')?'C기장 관숙 편성 위반(FO A 동승 필요)':'C기장 페어링 위반';
               violations.push({g:msg,fl:flt.fl,p:pair});
@@ -300,7 +312,7 @@
           }
           if(grpFoEff==='C'){
             var ok2=capG==='A',ck2='cf|'+pair;
-            if(!seen.cf.has(ck2)){seen.cf.add(ck2);cfo.push({p:pair,fl:grpFls,ok:ok2});}
+            track(cfo,seen.cf,ck2,{p:pair,fl:grpFls,ok:ok2});
             if(!ok2)violations.push({g:'C부기장 페어링 위반',fl:flt.fl,p:pair});
             [org,dst].forEach(function(ap){
               if(!CFG.A.has(ap)&&!CFG.B.has(ap)&&!CFG.C.has(ap))violations.push({g:'C부기장 분류외 공항 위반',fl:flt.fl,p:pair,ap:ap});
@@ -310,7 +322,7 @@
             if(CFG.A.has(ap)){
               var cok=capG==='A',fok=grpFoEff==='A'||grpFoEff==='SKIP';
               var k='aa|'+pair+'|'+ap;
-              if(!seen.aa.has(k)){seen.aa.add(k);aap.push({p:pair,fl:grpFls,ap:ap,ok:cok&&fok});}
+              track(aap,seen.aa,k,{p:pair,fl:grpFls,ap:ap,ok:cok&&fok});
               if(!cok)violations.push({g:'A공항 기장 등급 위반',fl:flt.fl,p:pair,ap:ap});
               if(!fok)violations.push({g:'A공항 부기장 등급 위반',fl:flt.fl,p:pair,ap:ap});
             }
