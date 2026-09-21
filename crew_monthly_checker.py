@@ -1,7 +1,7 @@
 # ==========================================
 # crew_monthly_checker.py
 # 버전: v3.8 (2026-09-22) — gradeOverride에 'from'(시작일) 지원 추가 — crew_check.js v39 와 동기화
-# 버전: v3.7 (2026-09-22) — 필요 라이브러리 자동 설치 추가 (bs4 미설치 오류 방지)
+# - v3.8: 등급 강제 오버라이드에 시작일(from) 지원 추가 (기존엔 종료일 until 만 가능)
 # - v3.7: 실행 시 bs4/playwright/openpyxl 미설치를 자동 감지, pip 자동 설치 후 계속 진행
 #         (신규 PC/계정에서 "ModuleNotFoundError: No module named 'bs4'" 같은 오류로
 #          바로 멈추는 대신, 처음 1회만 자동으로 설치하고 넘어감)
@@ -50,6 +50,11 @@ import urllib.request
 
 CMS_URL  = "https://crew.eastarjet.com/cms/Admin/Schedule/CrewPairs/CrewPairList.php"
 HEADLESS = False
+# 콘솔 배너(main() 상단)가 이 두 값을 그대로 출력한다.
+# 버전을 올릴 때 파일 맨 위 changelog 주석뿐 아니라 여기도 같이 바꿔야
+# 배너에 날짜가 안 밀린다 (v3.8 이전엔 배너 날짜가 하드코딩돼 있어 밀렸던 문제 수정).
+VERSION = 'v3.8'
+UPDATED = '2026-09-22'
 # ==========================================
 # 편조점검 규칙 로딩
 # 규칙(공항등급/세이프티명단/1000시간명단/등급강제)은 GitHub의 rules.json
@@ -699,8 +704,8 @@ def get_target_month():
 
 async def main():
     print('='*50)
-    print('✈  편조점검 월간 자동 조회 v3.8')
-    print('    (2026-08-14) | 문의: 승무계획팀')
+    print(f'✈  편조점검 월간 자동 조회 {VERSION}')
+    print(f'    ({UPDATED}) | 문의: 승무계획팀')
     print('='*50)
 
     year, month, start_day, last_day = get_target_month()
