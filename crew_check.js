@@ -62,8 +62,8 @@
   if(!rows.length){alert('편조 데이터를 찾을 수 없습니다.');return;}
   var raw=rows;
   var dm=location.href.match(/d=(\d{4}-\d{2}-\d{2})/);
-  var VERSION='v39';
-  var UPDATED='2026-09-22';
+  var VERSION='v40';
+  var UPDATED='2026-10-15';
   var date=dm?dm[1].replace(/-/g,'/'):'날짜미상';
   var ym=dm?dm[1].slice(0,7):'';
   var scheduleDate=dm?dm[1]:new Date().toISOString().slice(0,10);
@@ -94,6 +94,7 @@
   CFG.spBan=new Set(spSel.ban);
   CFG.spOK=new Set(spSel.ok);
   var spMonthLabel=spKey.replace('-','.')+' 기준';
+  var spMissing=!!ym&&!SP_BY_MONTH[ym]; // 조회월 명단이 rules.json에 아직 없음 → 이전 달 명단으로 대체 중
   var KR=new Set(RULES.koreanAirports);
   function isDom(rt){var p=String(rt||'').split('/');return KR.has(p[0])&&KR.has(p[1]);}
   var WATCH=new Set(RULES.watchAirports||[]);
@@ -496,7 +497,8 @@
   var panel=document.createElement('div');
   panel.id='_crewck';
   panel.style.cssText='position:fixed;top:0;right:0;width:520px;max-width:100vw;height:100vh;background:#12122a;color:#e0e0e0;overflow-y:auto;z-index:2147483647;padding:16px;font-size:13px;box-shadow:-6px 0 24px rgba(0,0,0,.6)';
-  var HEAD='<style>'+STYLE+'</style><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;border-bottom:1px solid #2a2a4a;padding-bottom:10px"><div><div style="font-weight:700;font-size:14px;color:#E4002B">✈ 편조 점검</div><div style="color:#888;font-size:11px">'+date+'</div></div><button onclick="document.getElementById(\'_crewck\').remove()" style="background:none;border:none;color:#888;font-size:18px;cursor:pointer;padding:4px 8px">✕</button></div><div style="background:#1e3a1e;border:1px solid #4ade8033;border-radius:6px;padding:6px 9px;margin-bottom:12px;font-size:10px;color:#86efac;display:flex;justify-content:space-between;align-items:center"><span>✅ 최신본 자동 로드 (GitHub)</span><span style="color:#4ade80;font-weight:700">'+VERSION+' · '+UPDATED+'</span></div><div style="background:#2a1e3a;border:1px solid #a855f733;border-radius:6px;padding:6px 9px;margin-bottom:12px;font-size:10px;color:#c4a5f7;display:flex;justify-content:space-between;align-items:center"><span>🛡️ 세이프티(FO) 명단 기준</span><span style="color:#c4a5f7;font-weight:700">'+spMonthLabel+'</span></div>';
+  var HEAD='<style>'+STYLE+'</style><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;border-bottom:1px solid #2a2a4a;padding-bottom:10px"><div><div style="font-weight:700;font-size:14px;color:#E4002B">✈ 편조 점검</div><div style="color:#888;font-size:11px">'+date+'</div></div><button onclick="document.getElementById(\'_crewck\').remove()" style="background:none;border:none;color:#888;font-size:18px;cursor:pointer;padding:4px 8px">✕</button></div><div style="background:#1e3a1e;border:1px solid #4ade8033;border-radius:6px;padding:6px 9px;margin-bottom:12px;font-size:10px;color:#86efac;display:flex;justify-content:space-between;align-items:center"><span>✅ 최신본 자동 로드 (GitHub)</span><span style="color:#4ade80;font-weight:700">'+VERSION+' · '+UPDATED+'</span></div><div style="background:#2a1e3a;border:1px solid #a855f733;border-radius:6px;padding:6px 9px;margin-bottom:12px;font-size:10px;color:#c4a5f7;display:flex;justify-content:space-between;align-items:center"><span>🛡️ 세이프티(FO) 명단 기준</span><span style="color:#c4a5f7;font-weight:700">'+spMonthLabel+'</span></div>'
+    +(spMissing?'<div style="background:#4a3a1e;border:1px solid #ffb02088;border-left:6px solid #ffb020;border-radius:6px;padding:8px 10px;margin-bottom:12px;font-size:12px;font-weight:700;color:#ffd166">⚠️ '+ym.replace("-",".")+' 세이프티 명단이 아직 없어 '+spMonthLabel+' 명단으로 판정 중입니다. rules.json 확인 필요</div>':'');
 
   var mode='all';
   function draw(){

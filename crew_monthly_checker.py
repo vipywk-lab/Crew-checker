@@ -1,5 +1,6 @@
 # ==========================================
 # crew_monthly_checker.py
+# 버전: v3.12 (2026-10-15) — 조회월 세이프티 명단이 없으면 경고 표시 (이전 달 명단 대체 사용 시)
 # 버전: v3.11 (2026-09-22) — 엑셀 결과 시트 가독성 추가 개선
 # - v3.11: 긴 내용이 잘리지 않게 행높이 자동 계산 / 셀 테두리 추가 / 헤더 행 고정(freeze_panes)
 # - v3.10: 규정위반/내부위반/참고 행 배경을 다크 톤 → 엑셀 표준 옅은 색(빨강/노랑/파랑) + 진한 글씨로 교체
@@ -58,8 +59,8 @@ HEADLESS = False
 # 콘솔 배너(main() 상단)가 이 두 값을 그대로 출력한다.
 # 버전을 올릴 때 파일 맨 위 changelog 주석뿐 아니라 여기도 같이 바꿔야
 # 배너에 날짜가 안 밀린다 (v3.8 이전엔 배너 날짜가 하드코딩돼 있어 밀렸던 문제 수정).
-VERSION = 'v3.11'
-UPDATED = '2026-09-22'
+VERSION = 'v3.12'
+UPDATED = '2026-10-15'
 # ==========================================
 # 편조점검 규칙 로딩
 # 규칙(공항등급/세이프티명단/1000시간명단/등급강제)은 GitHub의 rules.json
@@ -789,6 +790,9 @@ async def main():
             ym = f"{year}-{month:02d}"
             _current_schedule_date = f"{year}-{month:02d}-{day:02d}"
             sp_ban, sp_ok, sp_key = get_sp_lists(ym)
+            if sp_key != ym and not globals().get('_sp_warned'):
+                globals()['_sp_warned'] = True
+                print(f'\n⚠️  {ym} 세이프티 명단이 rules.json 에 없어 {sp_key} 명단으로 판정합니다. 확인 필요\n')
             url = f"{CMS_URL}?d={year}-{month:02d}-{day:02d}&s=true&e=true&a=true"
             print(f"[{day:02d}/{last_day}] {date_str} 조회 중...", end=' ', flush=True)
 
