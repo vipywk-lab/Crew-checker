@@ -62,8 +62,8 @@
   if(!rows.length){alert('편조 데이터를 찾을 수 없습니다.');return;}
   var raw=rows;
   var dm=location.href.match(/d=(\d{4}-\d{2}-\d{2})/);
-  var VERSION='v40';
-  var UPDATED='2026-10-15';
+  var VERSION='v41';
+  var UPDATED='2026-10-17';
   var date=dm?dm[1].replace(/-/g,'/'):'날짜미상';
   var ym=dm?dm[1].slice(0,7):'';
   var scheduleDate=dm?dm[1]:new Date().toISOString().slice(0,10);
@@ -77,7 +77,8 @@
     foAonly:new Set(RULES.foAonly),
     foABonly:new Set(RULES.foABonly),
     qa:new Set(RULES.qa),
-    cp:new Set(RULES.cp),
+    dlcp:new Set(RULES.dlcp||RULES.cp||[]),
+    flti:new Set(RULES.flti||[]),
     spBan:new Set(),
     spOK:new Set(),
     gradeOverride:new Map(Object.keys(RULES.gradeOverride||{}).map(function(k){return [k,RULES.gradeOverride[k]];})),
@@ -264,8 +265,10 @@
       var foN0=getName(b.fo);
       if(CFG.qa.has(capN))sp('ℹ️품질심사관',fls,capN);
       if(CFG.qa.has(foN0))sp('ℹ️품질심사관',fls,foN0);
-      if(CFG.cp.has(capN))sp('ℹ️노선심사관',fls,capN);
-      if(CFG.cp.has(foN0))sp('ℹ️노선심사관',fls,foN0);
+      if(CFG.dlcp.has(capN))sp('ℹ️사내심사관',fls,capN);
+      if(CFG.dlcp.has(foN0))sp('ℹ️사내심사관',fls,foN0);
+      if(CFG.flti.has(capN))sp('ℹ️교관',fls,capN);
+      if(CFG.flti.has(foN0))sp('ℹ️교관',fls,foN0);
 
       // ── 규정/세이프티 판정은 실제 담당 구간(레그 그룹) 단위로 정확히 처리 ──
       var srcLegs=(b.legs&&b.legs.length)?b.legs:b.flights.map(function(f){return{fl:f.fl,rt:f.rt,fo:b.fo,extra:b.extra||[]};});

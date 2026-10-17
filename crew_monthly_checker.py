@@ -1,5 +1,6 @@
 # ==========================================
 # crew_monthly_checker.py
+# 버전: v3.13 (2026-10-17) — 사내심사관(dlcp)/교관(flti) 명단 최신화, 노선심사관(cp)은 dlcp로 통합
 # 버전: v3.12 (2026-10-15) — 조회월 세이프티 명단이 없으면 경고 표시 (이전 달 명단 대체 사용 시)
 # 버전: v3.11 (2026-09-22) — 엑셀 결과 시트 가독성 추가 개선
 # - v3.11: 긴 내용이 잘리지 않게 행높이 자동 계산 / 셀 테두리 추가 / 헤더 행 고정(freeze_panes)
@@ -59,8 +60,8 @@ HEADLESS = False
 # 콘솔 배너(main() 상단)가 이 두 값을 그대로 출력한다.
 # 버전을 올릴 때 파일 맨 위 changelog 주석뿐 아니라 여기도 같이 바꿔야
 # 배너에 날짜가 안 밀린다 (v3.8 이전엔 배너 날짜가 하드코딩돼 있어 밀렸던 문제 수정).
-VERSION = 'v3.12'
-UPDATED = '2026-10-15'
+VERSION = 'v3.13'
+UPDATED = '2026-10-17'
 # ==========================================
 # 편조점검 규칙 로딩
 # 규칙(공항등급/세이프티명단/1000시간명단/등급강제)은 GitHub의 rules.json
@@ -103,7 +104,8 @@ CFG = {
     "foAonly": set(RULES["foAonly"]),
     "foABonly": set(RULES["foABonly"]),
     "qa"     : set(RULES["qa"]),
-    "cp"     : set(RULES["cp"]),
+    "dlcp"   : set(RULES.get("dlcp", RULES.get("cp", []))),
+    "flti"   : set(RULES.get("flti", [])),
     "gradeOverride": RULES.get("gradeOverride", {}),
     "hr1000Airports": set(RULES["hr1000Airports"]),
     "hr1000": set(RULES["hr1000"]),
@@ -416,10 +418,14 @@ def check(blocks, sp_ban, sp_ok):
             internalV.append({'type':'참고','note':True,'detail':'ℹ️품질심사관','fl':fls,'pair':cap_n,'dom':cur_dom})
         if fo_disp and get_name(b['fo']) in CFG['qa']:
             internalV.append({'type':'참고','note':True,'detail':'ℹ️품질심사관','fl':fls,'pair':get_name(b['fo']),'dom':cur_dom})
-        if cap_n in CFG['cp']:
-            internalV.append({'type':'참고','note':True,'detail':'ℹ️노선심사관','fl':fls,'pair':cap_n,'dom':cur_dom})
-        if fo_disp and get_name(b['fo']) in CFG['cp']:
-            internalV.append({'type':'참고','note':True,'detail':'ℹ️노선심사관','fl':fls,'pair':get_name(b['fo']),'dom':cur_dom})
+        if cap_n in CFG['dlcp']:
+            internalV.append({'type':'참고','note':True,'detail':'ℹ️사내심사관','fl':fls,'pair':cap_n,'dom':cur_dom})
+        if fo_disp and get_name(b['fo']) in CFG['dlcp']:
+            internalV.append({'type':'참고','note':True,'detail':'ℹ️사내심사관','fl':fls,'pair':get_name(b['fo']),'dom':cur_dom})
+        if cap_n in CFG['flti']:
+            internalV.append({'type':'참고','note':True,'detail':'ℹ️교관','fl':fls,'pair':cap_n,'dom':cur_dom})
+        if fo_disp and get_name(b['fo']) in CFG['flti']:
+            internalV.append({'type':'참고','note':True,'detail':'ℹ️교관','fl':fls,'pair':get_name(b['fo']),'dom':cur_dom})
 
         # ── 규정/세이프티 판정은 실제 담당 구간(레그 그룹) 단위로 정확히 처리 ──
         src_legs = b.get('legs') or [{'fl': f['fl'], 'rt': f['rt'], 'fo': b['fo'], 'extra': b.get('extra', [])} for f in b['flights']]
