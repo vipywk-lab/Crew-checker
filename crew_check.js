@@ -62,8 +62,8 @@
   if(!rows.length){alert('편조 데이터를 찾을 수 없습니다.');return;}
   var raw=rows;
   var dm=location.href.match(/d=(\d{4}-\d{2}-\d{2})/);
-  var VERSION='v41';
-  var UPDATED='2026-10-17';
+  var VERSION='v42';
+  var UPDATED='2026-11-03';
   var date=dm?dm[1].replace(/-/g,'/'):'날짜미상';
   var ym=dm?dm[1].slice(0,7):'';
   var scheduleDate=dm?dm[1]:new Date().toISOString().slice(0,10);
