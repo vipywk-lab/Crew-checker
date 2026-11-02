@@ -62,7 +62,7 @@
   if(!rows.length){alert('편조 데이터를 찾을 수 없습니다.');return;}
   var raw=rows;
   var dm=location.href.match(/d=(\d{4}-\d{2}-\d{2})/);
-  var VERSION='v42';
+  var VERSION='v43';
   var UPDATED='2026-11-03';
   var date=dm?dm[1].replace(/-/g,'/'):'날짜미상';
   var ym=dm?dm[1].slice(0,7):'';
@@ -362,6 +362,7 @@
   }
 
   function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+  function thRow(cols){return '<tr class="th">'+cols.map(function(c){return'<td>'+c+'</td>';}).join('')+'</tr>';}
   function row(cells){return '<tr>'+(cells.map(function(c){return'<td>'+c+'</td>';}).join(''))+'</tr>';}
 
   var STYLE=[
@@ -369,17 +370,17 @@
     '#_crewck *{box-sizing:border-box}',
     '#_crewck{position:fixed;top:0;right:0;width:540px;max-width:100vw;height:100vh;overflow-y:auto;z-index:2147483647;padding:18px;background:#f4f5f8;color:#1a1f2b;font-size:13.5px;line-height:1.5;box-shadow:-8px 0 28px rgba(15,23,42,.25)}',
     '#_crewck .hd{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}',
-    '#_crewck .hd .ttl{font-weight:800;font-size:18px;color:#E4002B;letter-spacing:-.3px}',
+    '#_crewck .hd .ttl{font-weight:800;font-size:18px;color:#1a1f2b}',
+    '#_crewck .hd .ttl .lg{color:#E4002B}',
     '#_crewck .hd .dt{color:#5b6475;font-size:12.5px;margin-top:1px}',
     '#_crewck .hd .x{background:none;border:0;color:#5b6475;font-size:20px;cursor:pointer;padding:4px 8px;border-radius:6px}',
-    '#_crewck .hd .x:hover{background:#e6e9ef;color:#1a1f2b}',
     '#_crewck .bn{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:7px 11px;margin-bottom:6px;border-radius:8px;font-size:12.5px;background:#fff;border:1px solid #e3e6ec;color:#3b4354}',
-    '#_crewck .bn b{font-weight:700;color:#1a1f2b}',
+    '#_crewck .ft{display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-top:6px;padding-top:10px;border-top:1px solid #e3e6ec;color:#5b6475;font-size:12px}',
+    '#_crewck .ft b{font-weight:700}',
     '#_crewck .bn.warn{background:#fff4e0;border-color:#f3c985;border-left:4px solid #d97706;color:#7a4300;font-weight:700;margin-bottom:10px}',
     '#_crewck .tabs{display:flex;gap:4px;padding:4px;background:#e6e9ef;border-radius:10px;margin:12px 0}',
     '#_crewck .tab{flex:1;border:0;background:transparent;color:#4a5365;padding:8px;border-radius:7px;font-size:13px;font-weight:700;cursor:pointer}',
-    '#_crewck .tab:hover{color:#1a1f2b}',
-    '#_crewck .tab.on{background:#fff;color:#E4002B;box-shadow:0 1px 3px rgba(15,23,42,.18)}',
+    '#_crewck .tab.on{background:#fff;color:#1a1f2b;box-shadow:0 1px 3px rgba(15,23,42,.18)}',
     '#_crewck .st{display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap}',
     '#_crewck .st>div{flex:1;min-width:90px;background:#fff;border:1px solid #e3e6ec;border-radius:10px;padding:10px 6px;text-align:center}',
     '#_crewck .st b{display:block;font-size:24px;font-weight:800;line-height:1.2;color:#1a1f2b}',
@@ -388,34 +389,36 @@
     '#_crewck .st>div.warn{background:#fff4e0;border-color:#f3c985}#_crewck .st>div.warn b{color:#b45309}',
     '#_crewck .st b.bl{color:#15803d}',
     '#_crewck .sec{background:#fff;border:1px solid #e3e6ec;border-left-width:5px;border-radius:10px;padding:12px 14px;margin-bottom:12px;font-size:13.5px}',
-    '#_crewck .sec h4,#_crewck .sec summary{margin:0 0 8px;font-weight:800;font-size:15px;letter-spacing:-.2px}',
+    '#_crewck .sec h4,#_crewck .sec summary{margin:0 0 8px;font-weight:800;font-size:15px}',
     '#_crewck .sec summary{cursor:pointer;user-select:none}',
     '#_crewck .sec.v{border-left-color:#d92d3a}#_crewck .sec.v h4,#_crewck .sec.v summary{color:#b3001b}',
     '#_crewck .sec.i{border-left-color:#d97706}#_crewck .sec.i h4,#_crewck .sec.i summary{color:#8a4b00}',
     '#_crewck .sec.ok{border-left-color:#16a34a}#_crewck .sec.ok h4,#_crewck .sec.ok summary{color:#166534}',
-    '#_crewck .sec.trn{border-left-color:#7c3aed}#_crewck .sec.trn h4,#_crewck .sec.trn summary{color:#5b21b6}',
-    '#_crewck .sec.info{border-left-color:#0284c7}#_crewck .sec.info h4,#_crewck .sec.info summary{color:#075985}',
-    '#_crewck .sec.note{border-left-color:#64748b}#_crewck .sec.note h4,#_crewck .sec.note summary{color:#334155}',
+    '#_crewck .sec.trn,#_crewck .sec.info,#_crewck .sec.note{border-left-color:#64748b}',
+    '#_crewck .sec.trn h4,#_crewck .sec.trn summary,#_crewck .sec.info h4,#_crewck .sec.info summary,#_crewck .sec.note h4,#_crewck .sec.note summary{color:#334155}',
     '#_crewck .sec table{width:100%;border-collapse:collapse}',
-    '#_crewck .sec td{padding:7px 8px;border-bottom:1px solid #eef0f4;color:#1a1f2b;vertical-align:top}',
+    '#_crewck .sec td{padding:7px 8px;border-bottom:1px solid #e3e6ec;color:#1a1f2b;vertical-align:top}',
     '#_crewck .sec tr:last-child td{border-bottom:0}',
-    '#_crewck .sec tr:hover td{background:#f7f8fb}',
+    '#_crewck .sec tr:nth-child(even) td{background:#f7f8fb}',
     '#_crewck .sec td:first-child{font-weight:600;font-variant-numeric:tabular-nums}',
-    '#_crewck .sec tr.th td{color:#5b6475;font-size:12px;font-weight:700;background:#f4f5f8;border-bottom:1px solid #e3e6ec}',
+    '#_crewck .sec tr.th td{color:#5b6475;font-size:12px;font-weight:700;background:#eef0f4;border-bottom:1px solid #d5d9e2}',
+    '@media (hover:hover) and (pointer:fine){#_crewck .sec tr:hover td{background:#eef2f9}#_crewck .tab:hover{color:#1a1f2b}#_crewck .xls:hover{background:#166534}#_crewck .hd .x:hover{background:#e6e9ef;color:#1a1f2b}}',
     '#_crewck .mut{color:#5b6475;font-weight:400}',
     '#_crewck .tag{display:inline-block;margin-left:4px;padding:0 6px;border-radius:8px;background:#fff4e0;color:#8a4b00;font-size:11.5px;font-weight:700}',
     '#_crewck span.ok{color:#15803d;font-weight:700}',
     '#_crewck span.bad{color:#c0182b;font-weight:700}',
     '#_crewck .lbl{display:inline-block;margin:10px 0 4px;padding:2px 10px;border-radius:10px;background:#e6e9ef;color:#1a1f2b;font-weight:700;font-size:12.5px}',
     '#_crewck .none{color:#15803d;text-align:center;padding:30px;font-size:16px;font-weight:700}',
-    '#_crewck .xls{width:100%;margin-bottom:10px;padding:9px;border-radius:8px;border:1px solid #15803d;background:#16a34a;color:#fff;font-weight:700;font-size:13px;cursor:pointer}',
-    '#_crewck .xls:hover{background:#15803d}'
+    '#_crewck .tab,#_crewck .xls,#_crewck .hd .x{transition:background-color 120ms ease,color 120ms ease,transform 160ms ease-out}',
+    '#_crewck .tab:active,#_crewck .xls:active,#_crewck .hd .x:active{transform:scale(.97)}',
+    '#_crewck .xls{width:100%;margin-bottom:10px;padding:9px;border-radius:8px;border:1px solid #15803d;background:#15803d;color:#fff;font-weight:700;font-size:13px;cursor:pointer}',
+    '#_crewck .xls:hover{background:#166534;border-color:#166534}'
   ].join('');
 
   function tabBar(mode){
-    var h='<div class="tabs">';
+    var h='<div class="tabs" role="tablist">';
     [['all','전체 점검'],['dom','국내선 편조']].forEach(function(t){
-      h+='<button class="tab'+(mode===t[0]?' on':'')+'" data-m="'+t[0]+'">'+t[1]+'</button>';
+      h+='<button class="tab'+(mode===t[0]?' on':'')+'" role="tab" aria-selected="'+(mode===t[0])+'" data-m="'+t[0]+'">'+t[1]+'</button>';
     });
     return h+'</div>';
   }
@@ -472,7 +475,7 @@
     h+='</div>';
     if(!L.length){h+='<div class="none">국내선 편조 없음</div>';return h;}
     h+='<button id="_domXlsBtn" class="xls">⬇ 엑셀로 다운로드</button>';
-    h+='<div class="sec info"><h4>🇰🇷 국내선 운항 편조 '+L.length+'건</h4><table><tbody>';
+    h+='<div class="sec info"><h4>국내선 운항 편조 '+L.length+'건</h4><table><tbody>';
     h+='<tr class="th"><td>기장 / 부기장</td><td>편명</td><td>노선</td></tr>';
     L.forEach(function(x){
       var crew=esc(x.cap)+' / '+esc(x.fo)+(x.extra?' <span class="mut">+'+esc(x.extra)+'</span>':'');
@@ -493,22 +496,22 @@
     h+='<div><b>'+r.specials.length+'</b><small>특이사항</small></div>';
     h+='</div>';
     if(vc){
-      h+='<div class="sec v"><h4>🚨 규정 위반 '+vc+'건</h4><table><tbody>';
+      h+='<div class="sec v"><h4>🚨 규정 위반 '+vc+'건</h4><table><tbody>'+thRow(['편명','위반 내용','대상']);
       r.violations.forEach(function(v){h+=row(['['+esc(v.fl)+']',esc(v.g)+(v.ap?' ('+v.ap+')':''),esc(v.p)]);});
       h+='</tbody></table></div>';
     }
     if(ic){
-      h+='<div class="sec i"><h4>⚠️ 내부 위반 '+ic+'건</h4><table><tbody>';
+      h+='<div class="sec i"><h4>⚠️ 내부 위반 '+ic+'건</h4><table><tbody>'+thRow(['편명','내용','대상']);
       r.internalV.forEach(function(v){h+=row(['['+esc(v.fl)+']',esc(v.h),esc(v.p)]);});
       h+='</tbody></table></div>';
     }
     if(r.intok.length){
-      h+='<div class="sec ok"><h4>✅ 내부 제한 정상 페어링 '+r.intok.length+'건</h4><table><tbody>';
+      h+='<div class="sec ok"><h4>✅ 내부 제한 정상 페어링 '+r.intok.length+'건</h4><table><tbody>'+thRow(['기장 (규칙)','편명','부기장']);
       r.intok.forEach(function(x){h+=row([esc(x.cap)+' ('+esc(x.rule)+')',esc(x.fl),esc(x.fo)]);});
       h+='</tbody></table></div>';
     }
     if(r.capTrainee.length){
-      h+='<div class="sec trn"><h4>✈️ 기장훈련생 페어링 (등급체크 제외) '+r.capTrainee.length+'건</h4><table><tbody>';
+      h+='<div class="sec trn"><h4>기장훈련생 페어링 (등급체크 제외) '+r.capTrainee.length+'건</h4><table><tbody>'+thRow(['기장 / 부기장 (등급)','편명']);
       r.capTrainee.forEach(function(x){h+=row([esc(x.cap)+' / '+esc(x.fo)+'('+esc(x.grade)+')',esc(x.fl)]);});
       h+='</tbody></table></div>';
     }
@@ -518,21 +521,21 @@
       if(r.ccap.length)cntParts.push('C기장 '+r.ccap.length);
       if(r.cfo.length)cntParts.push('C부기장 '+r.cfo.length);
       if(r.aap.length)cntParts.push('A공항 '+r.aap.length);
-      h+='<details class="sec info"'+(gpV?' open':'')+'><summary>📋 등급별 편조 ('+cntParts.join(' / ')+')'+(gpV?' <span class="bad">⚠위반 '+gpV+'</span>':'')+'</summary>';
-      if(r.ccap.length){h+='<div class="lbl">C기장</div><table><tbody>';r.ccap.forEach(function(x){h+=row([esc(x.p),esc(x.fl),x.ok?'<span class="ok">✓정상</span>':'<span class="bad">✗위반</span>']);});h+='</tbody></table>';}
-      if(r.cfo.length){h+='<div class="lbl">C부기장</div><table><tbody>';r.cfo.forEach(function(x){h+=row([esc(x.p),esc(x.fl),x.ok?'<span class="ok">✓정상</span>':'<span class="bad">✗위반</span>']);});h+='</tbody></table>';}
-      if(r.aap.length){h+='<div class="lbl">A공항</div><table><tbody>';r.aap.forEach(function(x){h+=row([esc(x.p),esc(x.fl),esc(x.ap),x.ok?'<span class="ok">✓</span>':'<span class="bad">✗</span>']);});h+='</tbody></table>';}
+      h+='<details class="sec info"'+(gpV?' open':'')+'><summary>등급별 편조 ('+cntParts.join(' / ')+')'+(gpV?' <span class="bad">⚠위반 '+gpV+'</span>':'')+'</summary>';
+      if(r.ccap.length){h+='<div class="lbl">C기장</div><table><tbody>'+thRow(['대상','편명','결과']);r.ccap.forEach(function(x){h+=row([esc(x.p),esc(x.fl),x.ok?'<span class="ok">✓정상</span>':'<span class="bad">✗위반</span>']);});h+='</tbody></table>';}
+      if(r.cfo.length){h+='<div class="lbl">C부기장</div><table><tbody>'+thRow(['대상','편명','결과']);r.cfo.forEach(function(x){h+=row([esc(x.p),esc(x.fl),x.ok?'<span class="ok">✓정상</span>':'<span class="bad">✗위반</span>']);});h+='</tbody></table>';}
+      if(r.aap.length){h+='<div class="lbl">A공항</div><table><tbody>'+thRow(['대상','편명','공항','결과']);r.aap.forEach(function(x){h+=row([esc(x.p),esc(x.fl),esc(x.ap),x.ok?'<span class="ok">✓</span>':'<span class="bad">✗</span>']);});h+='</tbody></table>';}
       h+='</details>';
     }
     if(r.specials.length){
-      h+='<div class="sec note"><h4>ℹ️ 특이사항 '+r.specials.length+'건</h4>';
+      h+='<div class="sec note"><h4>특이사항 '+r.specials.length+'건</h4>';
       var sgGroups={},sgOrder=[];
       r.specials.forEach(function(x){
         if(!sgGroups[x.g]){sgGroups[x.g]=[];sgOrder.push(x.g);}
         sgGroups[x.g].push(x);
       });
       sgOrder.forEach(function(g){
-        h+='<div class="lbl">'+esc(g)+' ('+sgGroups[g].length+')</div><table><tbody>';
+        h+='<div class="lbl">'+esc(g)+' ('+sgGroups[g].length+')</div><table><tbody>'+thRow(['편명','내용']);
         sgGroups[g].forEach(function(x){h+=row([esc(x.fl),esc(x.c)]);});
         h+='</tbody></table>';
       });
@@ -545,12 +548,15 @@
   var result=check(parse(raw));
   var panel=document.createElement('div');
   panel.id='_crewck';
-  var HEAD='<style>'+STYLE+'</style>'+'<div class="hd"><div><div class="ttl">✈ 편조 점검</div><div class="dt">'+date+'</div></div>'+'<button class="x" onclick="document.getElementById(\'_crewck\').remove()">✕</button></div>'+'<div class="bn"><span>✅ 최신본 자동 로드 (GitHub)</span><b>'+VERSION+' · '+UPDATED+'</b></div>'+'<div class="bn"><span>🛡️ 세이프티(FO) 명단 기준</span><b>'+spMonthLabel+'</b></div>'
+  var HEAD='<style>'+STYLE+'</style>'+'<div class="hd"><div><div class="ttl"><span class="lg">✈</span> 편조 점검</div><div class="dt">'+date+'</div></div>'+'<button class="x" aria-label="닫기" onclick="document.getElementById(\'_crewck\').remove()">✕</button></div>'
     +(spMissing?'<div class="bn warn">⚠️ '+ym.replace("-",".")+' 세이프티 명단이 아직 없어 '+spMonthLabel+' 명단으로 판정 중입니다. rules.json 확인 필요</div>':'');
+  var FOOT='<div class="ft"><span>세이프티(FO) 명단 기준 <b>'+spMonthLabel+'</b></span><span>최신본 자동 로드 (GitHub) · <b>'+VERSION+' · '+UPDATED+'</b></span></div>';
+  panel.setAttribute('role','dialog');
+  panel.setAttribute('aria-label','편조 점검');
 
   var mode='all';
   function draw(){
-    panel.innerHTML=HEAD+render(result,mode);
+    panel.innerHTML=HEAD+render(result,mode)+FOOT;
     panel.querySelectorAll('.tab').forEach(function(btn){
       btn.addEventListener('click',function(){
         mode=btn.getAttribute('data-m');
@@ -568,5 +574,11 @@
   }
   draw();
   document.body.appendChild(panel);
+  // Esc 키로 닫기 (패널이 열려 있을 때만)
+  function onKey(e){
+    if(!document.body.contains(panel)){document.removeEventListener('keydown',onKey);return;}
+    if(e.key==='Escape'){panel.remove();document.removeEventListener('keydown',onKey);}
+  }
+  document.addEventListener('keydown',onKey);
   }
 })();
