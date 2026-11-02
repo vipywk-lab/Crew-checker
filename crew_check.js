@@ -364,7 +364,53 @@
   function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
   function row(cells){return '<tr>'+(cells.map(function(c){return'<td>'+c+'</td>';}).join(''))+'</tr>';}
 
-  var STYLE='#_crewck,#_crewck button{font-family:"Malgun Gothic","맑은 고딕","Apple SD Gothic Neo",sans-serif}#_crewck *{box-sizing:border-box}#_crewck .st{display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap}#_crewck .st>div{flex:1;background:#1e3a5f;border-radius:8px;padding:9px 6px;text-align:center}#_crewck .st b{display:block;font-size:21px;font-weight:800}#_crewck .st small{font-size:11px;color:#b8c0d0}#_crewck .st.bad{background:#5f1e1e}#_crewck .st.bad b{color:#ff6b6b}#_crewck .st.warn{background:#4a3a1e}#_crewck .st.warn b{color:#ffd166}#_crewck .st b.bl{color:#4fc3f7}#_crewck .sec{border-radius:8px;padding:10px 12px;margin-bottom:12px;font-size:12.5px;border:1px solid transparent;border-left-width:6px}#_crewck .sec h4,#_crewck .sec summary{margin:0 0 8px;font-weight:800;font-size:14.5px;letter-spacing:-.2px}#_crewck .sec summary{cursor:pointer;user-select:none}#_crewck .sec.v{background:#3b1518;border-color:#ff4d5e55;border-left-color:#ff4d5e}#_crewck .sec.v h4,#_crewck .sec.v summary{color:#ff8a95}#_crewck .sec.i{background:#3a2a0e;border-color:#ffb02055;border-left-color:#ffb020}#_crewck .sec.i h4,#_crewck .sec.i summary{color:#ffc857}#_crewck .sec.ok{background:#10301d;border-color:#22c55e55;border-left-color:#22c55e}#_crewck .sec.ok h4,#_crewck .sec.ok summary{color:#6ee7a0}#_crewck .sec.trn{background:#34124a;border-color:#e879f955;border-left-color:#e879f9}#_crewck .sec.trn h4,#_crewck .sec.trn summary{color:#f7b5ff}#_crewck .sec.info{background:#0e2a45;border-color:#38bdf855;border-left-color:#38bdf8}#_crewck .sec.info h4,#_crewck .sec.info summary{color:#7dd3fc}#_crewck .sec.note{background:#22252e;border-color:#94a3b855;border-left-color:#cbd5e1}#_crewck .sec.note h4,#_crewck .sec.note summary{color:#f1f5f9}#_crewck .sec table{width:100%;border-collapse:collapse}#_crewck .sec td{padding:5px 8px;border-bottom:1px solid #ffffff14;color:#eceef4;vertical-align:top}#_crewck .sec tr:nth-child(even) td{background:#ffffff08}#_crewck .sec td:first-child{font-variant-numeric:tabular-nums;white-space:nowrap}#_crewck span.ok{color:#4ade80;font-weight:700}#_crewck span.bad{color:#ff6b6b;font-weight:700}#_crewck .lbl{display:inline-block;margin:10px 0 4px;padding:2px 10px;border-radius:10px;background:#ffffff1c;color:#fff;font-weight:700;font-size:11.5px}#_crewck .none{color:#4ade80;text-align:center;padding:30px;font-size:15px}#_crewck .tabs{display:flex;gap:4px;margin-bottom:10px}#_crewck .tab{flex:1;background:#1e2a3a;border:1px solid #2a3a4a;color:#999;padding:8px;border-radius:6px;font-size:12px;cursor:pointer;font-weight:700}#_crewck .tab:hover{background:#26344a;color:#ddd}#_crewck .tab.on{background:#E4002B;border-color:#E4002B;color:#fff}';
+  var STYLE=[
+    '#_crewck,#_crewck button{font-family:"Pretendard","Malgun Gothic","맑은 고딕","Apple SD Gothic Neo",sans-serif}',
+    '#_crewck *{box-sizing:border-box}',
+    '#_crewck{position:fixed;top:0;right:0;width:540px;max-width:100vw;height:100vh;overflow-y:auto;z-index:2147483647;padding:18px;background:#f4f5f8;color:#1a1f2b;font-size:13.5px;line-height:1.5;box-shadow:-8px 0 28px rgba(15,23,42,.25)}',
+    '#_crewck .hd{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}',
+    '#_crewck .hd .ttl{font-weight:800;font-size:18px;color:#E4002B;letter-spacing:-.3px}',
+    '#_crewck .hd .dt{color:#5b6475;font-size:12.5px;margin-top:1px}',
+    '#_crewck .hd .x{background:none;border:0;color:#5b6475;font-size:20px;cursor:pointer;padding:4px 8px;border-radius:6px}',
+    '#_crewck .hd .x:hover{background:#e6e9ef;color:#1a1f2b}',
+    '#_crewck .bn{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:7px 11px;margin-bottom:6px;border-radius:8px;font-size:12.5px;background:#fff;border:1px solid #e3e6ec;color:#3b4354}',
+    '#_crewck .bn b{font-weight:700;color:#1a1f2b}',
+    '#_crewck .bn.warn{background:#fff4e0;border-color:#f3c985;border-left:4px solid #d97706;color:#7a4300;font-weight:700;margin-bottom:10px}',
+    '#_crewck .tabs{display:flex;gap:4px;padding:4px;background:#e6e9ef;border-radius:10px;margin:12px 0}',
+    '#_crewck .tab{flex:1;border:0;background:transparent;color:#4a5365;padding:8px;border-radius:7px;font-size:13px;font-weight:700;cursor:pointer}',
+    '#_crewck .tab:hover{color:#1a1f2b}',
+    '#_crewck .tab.on{background:#fff;color:#E4002B;box-shadow:0 1px 3px rgba(15,23,42,.18)}',
+    '#_crewck .st{display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap}',
+    '#_crewck .st>div{flex:1;min-width:90px;background:#fff;border:1px solid #e3e6ec;border-radius:10px;padding:10px 6px;text-align:center}',
+    '#_crewck .st b{display:block;font-size:24px;font-weight:800;line-height:1.2;color:#1a1f2b}',
+    '#_crewck .st small{font-size:12px;color:#5b6475}',
+    '#_crewck .st>div.bad{background:#fdecee;border-color:#f5b5bc}#_crewck .st>div.bad b{color:#c0182b}',
+    '#_crewck .st>div.warn{background:#fff4e0;border-color:#f3c985}#_crewck .st>div.warn b{color:#b45309}',
+    '#_crewck .st b.bl{color:#15803d}',
+    '#_crewck .sec{background:#fff;border:1px solid #e3e6ec;border-left-width:5px;border-radius:10px;padding:12px 14px;margin-bottom:12px;font-size:13.5px}',
+    '#_crewck .sec h4,#_crewck .sec summary{margin:0 0 8px;font-weight:800;font-size:15px;letter-spacing:-.2px}',
+    '#_crewck .sec summary{cursor:pointer;user-select:none}',
+    '#_crewck .sec.v{border-left-color:#d92d3a}#_crewck .sec.v h4,#_crewck .sec.v summary{color:#b3001b}',
+    '#_crewck .sec.i{border-left-color:#d97706}#_crewck .sec.i h4,#_crewck .sec.i summary{color:#8a4b00}',
+    '#_crewck .sec.ok{border-left-color:#16a34a}#_crewck .sec.ok h4,#_crewck .sec.ok summary{color:#166534}',
+    '#_crewck .sec.trn{border-left-color:#7c3aed}#_crewck .sec.trn h4,#_crewck .sec.trn summary{color:#5b21b6}',
+    '#_crewck .sec.info{border-left-color:#0284c7}#_crewck .sec.info h4,#_crewck .sec.info summary{color:#075985}',
+    '#_crewck .sec.note{border-left-color:#64748b}#_crewck .sec.note h4,#_crewck .sec.note summary{color:#334155}',
+    '#_crewck .sec table{width:100%;border-collapse:collapse}',
+    '#_crewck .sec td{padding:7px 8px;border-bottom:1px solid #eef0f4;color:#1a1f2b;vertical-align:top}',
+    '#_crewck .sec tr:last-child td{border-bottom:0}',
+    '#_crewck .sec tr:hover td{background:#f7f8fb}',
+    '#_crewck .sec td:first-child{font-weight:600;font-variant-numeric:tabular-nums}',
+    '#_crewck .sec tr.th td{color:#5b6475;font-size:12px;font-weight:700;background:#f4f5f8;border-bottom:1px solid #e3e6ec}',
+    '#_crewck .mut{color:#5b6475;font-weight:400}',
+    '#_crewck .tag{display:inline-block;margin-left:4px;padding:0 6px;border-radius:8px;background:#fff4e0;color:#8a4b00;font-size:11.5px;font-weight:700}',
+    '#_crewck span.ok{color:#15803d;font-weight:700}',
+    '#_crewck span.bad{color:#c0182b;font-weight:700}',
+    '#_crewck .lbl{display:inline-block;margin:10px 0 4px;padding:2px 10px;border-radius:10px;background:#e6e9ef;color:#1a1f2b;font-weight:700;font-size:12.5px}',
+    '#_crewck .none{color:#15803d;text-align:center;padding:30px;font-size:16px;font-weight:700}',
+    '#_crewck .xls{width:100%;margin-bottom:10px;padding:9px;border-radius:8px;border:1px solid #15803d;background:#16a34a;color:#fff;font-weight:700;font-size:13px;cursor:pointer}',
+    '#_crewck .xls:hover{background:#15803d}'
+  ].join('');
 
   function tabBar(mode){
     var h='<div class="tabs">';
@@ -425,13 +471,13 @@
     h+='<div><b>'+nMix+'</b><small>국제 혼합</small></div>';
     h+='</div>';
     if(!L.length){h+='<div class="none">국내선 편조 없음</div>';return h;}
-    h+='<button id="_domXlsBtn" style="width:100%;margin-bottom:10px;padding:8px;border-radius:6px;border:1px solid #2d7a45;background:#1e5631;color:#fff;font-weight:700;font-size:12px;cursor:pointer">⬇ 엑셀로 다운로드</button>';
+    h+='<button id="_domXlsBtn" class="xls">⬇ 엑셀로 다운로드</button>';
     h+='<div class="sec info"><h4>🇰🇷 국내선 운항 편조 '+L.length+'건</h4><table><tbody>';
-    h+='<tr style="color:#888;font-size:10px"><td>기장 / 부기장</td><td>편명</td><td>노선</td></tr>';
+    h+='<tr class="th"><td>기장 / 부기장</td><td>편명</td><td>노선</td></tr>';
     L.forEach(function(x){
-      var crew=esc(x.cap)+' / '+esc(x.fo)+(x.extra?' <span style="color:#888">+'+esc(x.extra)+'</span>':'');
-      var tag=x.mix?' <span style="color:#ffd166;font-size:9px">[국제혼합]</span>':'';
-      h+=row([crew+tag,esc(x.fl),'<span style="color:#aaa;font-size:10px">'+esc(x.rt)+'</span>']);
+      var crew=esc(x.cap)+' / '+esc(x.fo)+(x.extra?' <span class="mut">+'+esc(x.extra)+'</span>':'');
+      var tag=x.mix?' <span class="tag">국제혼합</span>':'';
+      h+=row([crew+tag,esc(x.fl),'<span class="mut">'+esc(x.rt)+'</span>']);
     });
     h+='</tbody></table></div>';
     return h;
@@ -499,9 +545,8 @@
   var result=check(parse(raw));
   var panel=document.createElement('div');
   panel.id='_crewck';
-  panel.style.cssText='position:fixed;top:0;right:0;width:520px;max-width:100vw;height:100vh;background:#12122a;color:#e0e0e0;overflow-y:auto;z-index:2147483647;padding:16px;font-size:13px;box-shadow:-6px 0 24px rgba(0,0,0,.6)';
-  var HEAD='<style>'+STYLE+'</style><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;border-bottom:1px solid #2a2a4a;padding-bottom:10px"><div><div style="font-weight:700;font-size:14px;color:#E4002B">✈ 편조 점검</div><div style="color:#888;font-size:11px">'+date+'</div></div><button onclick="document.getElementById(\'_crewck\').remove()" style="background:none;border:none;color:#888;font-size:18px;cursor:pointer;padding:4px 8px">✕</button></div><div style="background:#1e3a1e;border:1px solid #4ade8033;border-radius:6px;padding:6px 9px;margin-bottom:12px;font-size:10px;color:#86efac;display:flex;justify-content:space-between;align-items:center"><span>✅ 최신본 자동 로드 (GitHub)</span><span style="color:#4ade80;font-weight:700">'+VERSION+' · '+UPDATED+'</span></div><div style="background:#2a1e3a;border:1px solid #a855f733;border-radius:6px;padding:6px 9px;margin-bottom:12px;font-size:10px;color:#c4a5f7;display:flex;justify-content:space-between;align-items:center"><span>🛡️ 세이프티(FO) 명단 기준</span><span style="color:#c4a5f7;font-weight:700">'+spMonthLabel+'</span></div>'
-    +(spMissing?'<div style="background:#4a3a1e;border:1px solid #ffb02088;border-left:6px solid #ffb020;border-radius:6px;padding:8px 10px;margin-bottom:12px;font-size:12px;font-weight:700;color:#ffd166">⚠️ '+ym.replace("-",".")+' 세이프티 명단이 아직 없어 '+spMonthLabel+' 명단으로 판정 중입니다. rules.json 확인 필요</div>':'');
+  var HEAD='<style>'+STYLE+'</style>'+'<div class="hd"><div><div class="ttl">✈ 편조 점검</div><div class="dt">'+date+'</div></div>'+'<button class="x" onclick="document.getElementById(\'_crewck\').remove()">✕</button></div>'+'<div class="bn"><span>✅ 최신본 자동 로드 (GitHub)</span><b>'+VERSION+' · '+UPDATED+'</b></div>'+'<div class="bn"><span>🛡️ 세이프티(FO) 명단 기준</span><b>'+spMonthLabel+'</b></div>'
+    +(spMissing?'<div class="bn warn">⚠️ '+ym.replace("-",".")+' 세이프티 명단이 아직 없어 '+spMonthLabel+' 명단으로 판정 중입니다. rules.json 확인 필요</div>':'');
 
   var mode='all';
   function draw(){
