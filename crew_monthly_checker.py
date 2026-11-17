@@ -1,5 +1,6 @@
 # ==========================================
 # crew_monthly_checker.py
+# 버전: v3.14 (2026-11-18) — 기간 한정 부기장 등급 제한(foLimit) 지원
 # 버전: v3.13 (2026-10-17) — 사내심사관(dlcp)/교관(flti) 명단 최신화, 노선심사관(cp)은 dlcp로 통합
 # 버전: v3.12 (2026-10-15) — 조회월 세이프티 명단이 없으면 경고 표시 (이전 달 명단 대체 사용 시)
 # 버전: v3.11 (2026-09-22) — 엑셀 결과 시트 가독성 추가 개선
@@ -60,8 +61,8 @@ HEADLESS = False
 # 콘솔 배너(main() 상단)가 이 두 값을 그대로 출력한다.
 # 버전을 올릴 때 파일 맨 위 changelog 주석뿐 아니라 여기도 같이 바꿔야
 # 배너에 날짜가 안 밀린다 (v3.8 이전엔 배너 날짜가 하드코딩돼 있어 밀렸던 문제 수정).
-VERSION = 'v3.13'
-UPDATED = '2026-10-17'
+VERSION = 'v3.14'
+UPDATED = '2026-11-18'
 # ==========================================
 # 편조점검 규칙 로딩
 # 규칙(공항등급/세이프티명단/1000시간명단/등급강제)은 GitHub의 rules.json
@@ -103,6 +104,7 @@ CFG = {
     "dadBan" : set(RULES["dadBan"]),
     "foAonly": set(RULES["foAonly"]),
     "foABonly": set(RULES["foABonly"]),
+    "foLimit": RULES.get("foLimit", []),
     "qa"     : set(RULES["qa"]),
     "dlcp"   : set(RULES.get("dlcp", RULES.get("cp", []))),
     "flti"   : set(RULES.get("flti", [])),
@@ -145,6 +147,10 @@ _current_schedule_date = None
 
 def ov_active(ov, d):
     return (not ov.get('from') or d >= ov['from']) and (not ov.get('until') or d <= ov['until'])
+
+def fo_limit_on(name, rule):
+    sd = _current_schedule_date or datetime.now().strftime('%Y-%m-%d')
+    return any(e.get('name') == name and e.get('rule') == rule and ov_active(e, sd) for e in CFG["foLimit"])
 
 def get_grade(s):
     n = get_name(s)
@@ -513,10 +519,10 @@ def check(blocks, sp_ban, sp_ok):
                             internalV.append({'type':'참고','note':True,'detail':'🛫생지공항(1000hr↑) 정상',
                                                'fl':grp_fls,'pair':f"{b['cap']} ({ap})",'dom':grp_dom})
 
-                if cap_n in CFG['foAonly']:
+                if cap_n in CFG['foAonly'] or fo_limit_on(cap_n, 'A'):
                     if grp_fo_eff != 'A':
                         internalV.append({'type':'내부위반','detail':f'{cap_n} FO제한위반','fl':flt['fl'],'pair':grp_fo,'ap':'','dom':grp_dom})
-                if cap_n in CFG['foABonly']:
+                if cap_n in CFG['foABonly'] or fo_limit_on(cap_n, 'AB'):
                     if grp_fo_eff not in ('A', 'B'):
                         internalV.append({'type':'내부위반','detail':f'{cap_n} FO제한위반','fl':flt['fl'],'pair':grp_fo,'ap':'','dom':grp_dom})
 

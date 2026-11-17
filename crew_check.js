@@ -62,8 +62,8 @@
   if(!rows.length){alert('편조 데이터를 찾을 수 없습니다.');return;}
   var raw=rows;
   var dm=location.href.match(/d=(\d{4}-\d{2}-\d{2})/);
-  var VERSION='v44';
-  var UPDATED='2026-11-03';
+  var VERSION='v45';
+  var UPDATED='2026-11-18';
   var date=dm?dm[1].replace(/-/g,'/'):'날짜미상';
   var ym=dm?dm[1].slice(0,7):'';
   var scheduleDate=dm?dm[1]:new Date().toISOString().slice(0,10);
@@ -86,6 +86,7 @@
     hr1000:new Set(RULES.hr1000),
     captainTrainee:new Set(RULES.captainTrainee||[])
   };
+  (RULES.foLimit||[]).forEach(function(e){if(ovActive(e,scheduleDate))(e.rule==='A'?CFG.foAonly:CFG.foABonly).add(e.name);});
   var SP_BY_MONTH=RULES.safetyByMonth;
   var _mk=Object.keys(SP_BY_MONTH).sort();
   var spKey = !ym ? _mk[_mk.length-1]
