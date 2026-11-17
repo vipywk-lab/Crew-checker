@@ -62,7 +62,7 @@
   if(!rows.length){alert('편조 데이터를 찾을 수 없습니다.');return;}
   var raw=rows;
   var dm=location.href.match(/d=(\d{4}-\d{2}-\d{2})/);
-  var VERSION='v45';
+  var VERSION='v46';
   var UPDATED='2026-11-18';
   var date=dm?dm[1].replace(/-/g,'/'):'날짜미상';
   var ym=dm?dm[1].slice(0,7):'';
@@ -109,12 +109,17 @@
     return m?m[1]:'';
   }
   function ovActive(ov,d){return(!ov.from||d>=ov.from)&&(!ov.until||d<=ov.until);}
+  // 한 사람에 기간별 여러 건 지정 가능: 값이 객체 1개 또는 배열. 오늘 날짜에 해당하는 것을 반환
+  function ovFor(n){
+    var v=CFG.gradeOverride.get(n);if(!v)return null;
+    var a=Array.isArray(v)?v:[v];
+    for(var i=0;i<a.length;i++)if(ovActive(a[i],scheduleDate))return a[i];
+    return null;
+  }
   function getGrade(s){
     var n=getName(s);
-    if(CFG.gradeOverride.has(n)){
-      var ov=CFG.gradeOverride.get(n);
-      if(ovActive(ov,scheduleDate))return ov.grade;
-    }
+    var ov=ovFor(n);
+    if(ov)return ov.grade;
     return getSiteGrade(s);
   }
   function isJunk(s){return /^\d{1,2}\/\d{1,2}/.test(s)||/편조/.test(s)||/점검/.test(s)||s.length===0;}
@@ -255,11 +260,9 @@
       [b.cap,b.fo].concat(b.extra||[]).forEach(function(raw){
         if(!raw)return;
         var nm=getName(raw),sg=getSiteGrade(raw);
-        if(CFG.gradeOverride.has(nm)){
-          var ov0=CFG.gradeOverride.get(nm);
-          if(ovActive(ov0,scheduleDate)&&sg===ov0.grade){
-            sp('✅사이트 등급 갱신 확인(오버라이드 해제 가능)',fls,nm+'('+sg+')');
-          }
+        var ov0=ovFor(nm);
+        if(ov0&&sg===ov0.grade){
+          sp('✅사이트 등급 갱신 확인(오버라이드 해제 가능)',fls,nm+'('+sg+')');
         }
         if(hasLV(raw))sp('🌫️LV 저시정 제한',fls,getName(raw)+' ('+getGrade(raw)+'LV)');
       });

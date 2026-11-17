@@ -1,5 +1,6 @@
 # ==========================================
 # crew_monthly_checker.py
+# 버전: v3.15 (2026-11-18) — 등급 강제를 한 사람에 기간별 여러 건 지정 가능(예: C → A 순차 적용)
 # 버전: v3.14 (2026-11-18) — 기간 한정 부기장 등급 제한(foLimit) 지원
 # 버전: v3.13 (2026-10-17) — 사내심사관(dlcp)/교관(flti) 명단 최신화, 노선심사관(cp)은 dlcp로 통합
 # 버전: v3.12 (2026-10-15) — 조회월 세이프티 명단이 없으면 경고 표시 (이전 달 명단 대체 사용 시)
@@ -61,7 +62,7 @@ HEADLESS = False
 # 콘솔 배너(main() 상단)가 이 두 값을 그대로 출력한다.
 # 버전을 올릴 때 파일 맨 위 changelog 주석뿐 아니라 여기도 같이 바꿔야
 # 배너에 날짜가 안 밀린다 (v3.8 이전엔 배너 날짜가 하드코딩돼 있어 밀렸던 문제 수정).
-VERSION = 'v3.14'
+VERSION = 'v3.15'
 UPDATED = '2026-11-18'
 # ==========================================
 # 편조점검 규칙 로딩
@@ -152,13 +153,22 @@ def fo_limit_on(name, rule):
     sd = _current_schedule_date or datetime.now().strftime('%Y-%m-%d')
     return any(e.get('name') == name and e.get('rule') == rule and ov_active(e, sd) for e in CFG["foLimit"])
 
+def ov_for(n, sd):
+    # 한 사람에 기간별 여러 건 지정 가능: 값이 dict 1개 또는 list. 해당 날짜에 유효한 것을 반환
+    v = CFG["gradeOverride"].get(n)
+    if not v:
+        return None
+    for ov in (v if isinstance(v, list) else [v]):
+        if ov_active(ov, sd):
+            return ov
+    return None
+
 def get_grade(s):
     n = get_name(s)
-    if n in CFG["gradeOverride"]:
-        ov = CFG["gradeOverride"][n]
-        sd = _current_schedule_date or datetime.now().strftime('%Y-%m-%d')
-        if ov_active(ov, sd):
-            return ov["grade"]
+    sd = _current_schedule_date or datetime.now().strftime('%Y-%m-%d')
+    ov = ov_for(n, sd)
+    if ov:
+        return ov["grade"]
     return get_site_grade(s)
 
 def get_lv(s):
@@ -409,10 +419,9 @@ def check(blocks, sp_ban, sp_ok):
             if not raw:
                 continue
             nm, sg = get_name(raw), get_site_grade(raw)
-            if nm in CFG['gradeOverride']:
-                ov0 = CFG['gradeOverride'][nm]
-                sd0 = _current_schedule_date or datetime.now().strftime('%Y-%m-%d')
-                if ov_active(ov0, sd0) and sg == ov0['grade']:
+            sd0 = _current_schedule_date or datetime.now().strftime('%Y-%m-%d')
+            ov0 = ov_for(nm, sd0)
+            if ov0 and sg == ov0['grade']:
                     internalV.append({'type': '참고', 'note': True,
                                        'detail': '✅사이트 등급 갱신 확인(오버라이드 해제 가능)',
                                        'fl': fls, 'pair': f"{nm}({sg})", 'dom': cur_dom})
